@@ -473,23 +473,30 @@
             } catch (error) {
                 // --- CUSTOM ERROR HANDLING FOR CREDENTIAL-ALREADY-IN-USE ---
                 if (error.code === 'auth/credential-already-in-use') {
-                    // 1. Get the Google credential that caused the error
-                    const credential = GoogleAuthProvider.credentialFromError(error);
+                    // This means the Google account is already linked to a permanent user.
+                    // We need to switch the session to that permanent user.
                     
-                    // 2. Fetch the existing sign-in methods for the email (Google)
-                    const methods = await fetchSignInMethodsForEmail(auth, error.customData.email);
+                    const credential = GoogleAuthProvider.credentialFromError(error);
 
-                    // 3. If the primary method is Google, sign in directly with the credential
-                    if (methods.includes(GoogleAuthProvider.PROVIDER_ID)) {
-                        // Sign out the current anonymous user (A)
+                    // Check if we actually got a credential back
+                    if (!credential) {
+                        console.error("Link failed: Could not retrieve credential for sign-in.");
+                        authStatusDisplay.textContent = "Status: Sign-in failed (Credential Missing).";
+                        return;
+                    }
+
+                    try {
+                        // 1. Sign out the current anonymous user (to free up the session)
                         await auth.signOut();
                         
-                        // Sign in as the permanent Google user (B)
+                        // 2. Sign in directly as the permanent Google user
                         await signInWithCredential(auth, credential);
                         
                         authStatusDisplay.textContent = "Status: Switched to permanent account!";
-                        // Note: The onAuthStateChanged listener will refresh the UI and data
                         return;
+                    } catch (signInError) {
+                        console.error("Sign-in Switch Failed:", signInError);
+                        authStatusDisplay.textContent = `Status: Sign-in switch failed.`;
                     }
                 }
                 // -------------------------------------------------------------------
