@@ -82,7 +82,7 @@
     <div class="app-container bg-white rounded-none sm:rounded-xl pt-6 px-4 pb-4 sm:p-6 space-y-6">
         <header class="pb-4 border-b border-gray-100">
             <h1 class="text-3xl font-extrabold text-primary text-center flex justify-center items-center">
-                <svg class="w-7 h-7 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z"></path></svg>
+                <svg class="w-7 h-7 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z"></path></svg>
                 Number Keeper
             </h1>
             <p id="authStatusDisplay" class="text-xs text-gray-500 text-center mt-1">Status: Checking authentication...</p>
@@ -169,7 +169,7 @@
     <script type="module">
         // Firebase Imports
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, fetchSignInMethodsForEmail, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
@@ -213,7 +213,7 @@
         const addNotebookBtn = document.getElementById('addNotebookBtn');
         const deleteNotebookBtn = document.getElementById('deleteNotebookBtn');
         const initialLoading = document.getElementById('initialLoading');
-        const googleSignInBtn = document.getElementById('googleSignInBtn'); // Re-added UI element
+        const googleSignInBtn = document.getElementById('googleSignInBtn');
 
         // Modal Elements
         const modalOverlay = document.getElementById('modalOverlay');
@@ -223,7 +223,7 @@
         const modalCancelBtn = document.getElementById('modalCancelBtn');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
         
-        const googleProvider = new GoogleAuthProvider(); // Re-added provider
+        const googleProvider = new GoogleAuthProvider();
 
         // --- Core Firebase and State Management ---
 
@@ -462,7 +462,7 @@
                 const user = auth.currentUser;
                 
                 if (user && user.isAnonymous) {
-                    // Link the Google account to the existing anonymous account
+                    // Try to link the Google account to the existing anonymous account
                     await linkWithPopup(user, googleProvider);
                     authStatusDisplay.textContent = "Status: Account upgraded successfully!";
                 } else {
@@ -471,6 +471,29 @@
                     authStatusDisplay.textContent = "Status: Signed in!";
                 }
             } catch (error) {
+                // --- CUSTOM ERROR HANDLING FOR CREDENTIAL-ALREADY-IN-USE ---
+                if (error.code === 'auth/credential-already-in-use') {
+                    // 1. Get the Google credential that caused the error
+                    const credential = GoogleAuthProvider.credentialFromError(error);
+                    
+                    // 2. Fetch the existing sign-in methods for the email (Google)
+                    const methods = await fetchSignInMethodsForEmail(auth, error.customData.email);
+
+                    // 3. If the primary method is Google, sign in directly with the credential
+                    if (methods.includes(GoogleAuthProvider.PROVIDER_ID)) {
+                        // Sign out the current anonymous user (A)
+                        await auth.signOut();
+                        
+                        // Sign in as the permanent Google user (B)
+                        await signInWithCredential(auth, credential);
+                        
+                        authStatusDisplay.textContent = "Status: Switched to permanent account!";
+                        // Note: The onAuthStateChanged listener will refresh the UI and data
+                        return;
+                    }
+                }
+                // -------------------------------------------------------------------
+
                 console.error("Google Sign-In Error:", error);
                 authStatusDisplay.textContent = `Status: Sign-in failed. Check console.`;
             } finally {
