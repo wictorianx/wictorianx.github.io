@@ -167,10 +167,11 @@
     </div>
 
     <script type="module">
-        // Firebase Imports
-        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, fetchSignInMethodsForEmail, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // --- Firebase Imports (Corrected Structure) ---
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"; // Core App
+        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, GoogleAuthProvider, linkWithPopup, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // Auth
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Firestore
+        // ===============================================
 
         // =========================================================================
         // 🚨 ACTION REQUIRED: PASTE YOUR FIREBASE CONFIGURATION HERE 🚨
@@ -236,22 +237,26 @@
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+            
+            // Flag to track if we need to manually sign in anonymously
+            let needsAnonSignIn = true;
 
-            try {
-                // Use custom token first (for Canvas), otherwise sign in anonymously
-                if (initialAuthToken) {
+            // 1. Check for custom token (Dev Environment ONLY)
+            if (initialAuthToken) {
+                try {
                     await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
+                    needsAnonSignIn = false;
+                } catch (error) {
+                    console.error("Custom token sign-in failed:", error);
                 }
-            } catch (error) {
-                console.error("Firebase Auth Error: Failed to sign in.", error);
-                authStatusDisplay.textContent = `Status: Auth Error. Check console!`;
-                initialLoading.innerHTML = `<li class="text-red-500 text-center py-4">Error connecting to cloud. Did you enable Anonymous Auth?</li>`;
-                return;
             }
-
-            onAuthStateChanged(auth, (user) => {
+            
+            // 2. Check for existing session (permanent user)
+            // onAuthStateChanged will handle permanent sessions, so we only sign in
+            // anonymously if no permanent user is found by the listener.
+            
+            // 3. Set up the listener first
+            onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid;
                     state.isAuthReady = true;
@@ -260,12 +265,25 @@
 
                     notebooksCollection = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
                     setupRealtimeListener();
+                    needsAnonSignIn = false; // A user session was found (permanent or anonymous)
+                } else if (needsAnonSignIn) {
+                    // 4. If no user session was found (and it's not the dev environment) 
+                    //    and the anonymous session hasn't been created yet, create it now.
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Firebase Auth Error: Failed to sign in anonymously.", error);
+                        authStatusDisplay.textContent = `Status: Auth Error. Check console!`;
+                        initialLoading.innerHTML = `<li class="text-red-500 text-center py-4">Error connecting to cloud. Did you enable Anonymous Auth?</li>`;
+                    }
                 } else {
+                    // User signed out, or failed to find any auth token.
                     state.isAuthReady = true;
                     authStatusDisplay.textContent = `Status: Logged Out`;
                     updateUI();
                 }
             });
+
         }
         
         function updateAuthStatus(user) {
