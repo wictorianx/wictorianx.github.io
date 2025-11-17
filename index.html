@@ -3,642 +3,543 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Number Notebook (Passcode Locked)</title>
+    <title>Number Notebook</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary': '#10b981', /* Emerald for positive/finance feel */
-                        'secondary': '#34d399',
-                        'background': '#f0fdfa',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        /* Custom styles for mobile-friendly layout */
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            background-color: theme('colors.background');
-        }
-        .app-container {
-            width: 100%;
-            max-width: 480px; /* Wider for better viewing of list */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            min-height: 100vh;
-        }
-        .entry-list-container {
-            max-height: 40vh;
-            overflow-y: auto;
-        }
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-        }
-        /* Style the notebook selector dropdown */
-        #notebookSelector {
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2310b981'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.7rem center;
-            background-size: 1.5em;
-        }
-        .passcode-container {
-            padding: 1.5rem;
-            border: 1px dashed #e5e7eb;
-            border-radius: 0.5rem;
-            margin-top: 1rem;
-        }
-    </style>
-</head>
-<body class="font-sans p-0 sm:p-4">
-
-    <div class="app-container bg-white rounded-none sm:rounded-xl pt-6 px-4 pb-4 sm:p-6 space-y-6">
-        <header class="pb-4 border-b border-gray-100">
-            <h1 class="text-3xl font-extrabold text-primary text-center flex justify-center items-center">
-                <svg class="w-7 h-7 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z"></path></svg>
-                Number Keeper
-            </h1>
-            <p id="authStatusDisplay" class="text-xs text-gray-500 text-center mt-1">Status: Checking authentication...</p>
-        </header>
-
-        <!-- Passcode Input Area (Shows when logged out) -->
-        <div id="passcodePanel" class="hidden">
-            <div class="passcode-container text-center space-y-3">
-                <p class="text-lg font-semibold text-gray-700">Access Restricted</p>
-                <p class="text-sm text-gray-500">Please enter the private passcode to access your notebooks.</p>
-                
-                <input type="password" id="passcodeInput" placeholder="Enter Passcode"
-                       class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 text-xl text-center">
-
-                <button id="passcodeSubmitBtn"
-                        class="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-secondary transition duration-300 shadow-xl disabled:opacity-50 disabled:shadow-none" disabled>
-                    Verify & Sign In
-                </button>
-                <p id="passcodeError" class="text-red-500 text-sm hidden">Invalid passcode. Try again.</p>
-            </div>
-        </div>
-
-        <!-- Notebook Selector & Actions (Hidden when locked) -->
-        <div id="appControls" class="space-y-6 hidden">
-            <div class="flex space-x-2">
-                <div class="relative flex-grow">
-                    <select id="notebookSelector"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 pr-10 bg-white font-medium text-gray-700">
-                        <!-- Options populated by JS -->
-                    </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-primary">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 6.757 7.586 5.343 9z"/></svg>
-                    </div>
-                </div>
-                
-                <button id="addNotebookBtn" class="p-3 bg-secondary text-white rounded-lg hover:bg-primary transition duration-300 shadow-md flex items-center justify-center" aria-label="Add New Notebook" disabled>
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                </button>
-
-                <button id="deleteNotebookBtn" class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-300 shadow-md flex items-center justify-center disabled:opacity-50" aria-label="Delete Current Notebook" disabled>
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
-            </div>
-
-            <!-- Current Sum Display -->
-            <div class="bg-primary/90 p-4 rounded-lg shadow-lg text-white">
-                <p class="text-sm font-light uppercase">Total Sum</p>
-                <p id="totalSumDisplay" class="text-4xl font-extrabold">$0.00</p>
-            </div>
-
-            <!-- Add Entry Form -->
-            <div class="space-y-4 pt-2">
-                <input type="number" id="newEntryInput" placeholder="Enter number (e.g., 42.50)" step="0.01"
-                       class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 text-xl"
-                       aria-label="New Number Entry" disabled>
-
-                <button id="addEntryBtn"
-                        class="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-secondary transition duration-300 shadow-xl disabled:opacity-50 disabled:shadow-none" disabled>
-                    Add Entry
-                </button>
-            </div>
-
-            <!-- Entry List -->
-            <div class="pt-4">
-                <h2 class="text-lg font-bold text-gray-700 mb-2">Entries</h2>
-                <div class="entry-list-container bg-white border border-gray-200 rounded-lg p-3">
-                    <ul id="entryList" class="divide-y divide-gray-100">
-                        <li id="initialLoading" class="text-gray-500 text-center py-4">
-                            <!-- Content loaded by JS -->
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            
-        </div>
-        
-        <!-- Sign Out Button (Only visible when signed in anonymously) -->
-        <div id="authPanel" class="account-status">
-            <button id="signOutBtn" class="px-4 py-2 signout-btn font-semibold rounded-lg shadow-md hover:shadow-lg transition duration-200 hidden">
-                Sign Out
-            </button>
-        </div>
-    </div>
-    
-    <!-- Modal for Creating/Confirming (Hidden by default) -->
-    <div id="modalOverlay" class="modal-overlay hidden">
-        <div id="modalContent" class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-sm space-y-4">
-            <h3 id="modalTitle" class="text-xl font-bold text-gray-800"></h3>
-            <p id="modalMessage" class="text-gray-600"></p>
-            
-            <input type="text" id="modalInput" class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150">
-
-            <div class="flex justify-end space-x-3 pt-2">
-                <button id="modalCancelBtn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150">Cancel</button>
-                <button id="modalConfirmBtn" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition duration-150 disabled:opacity-50"></button>
-            </div>
-        </div>
-    </div>
-
     <script type="module">
-        // --- Firebase Imports ---
-        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"; // Core App
-        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // Auth
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Firestore
-        // ===============================================
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithCustomToken, 
+            onAuthStateChanged, 
+            signOut,
+            GoogleAuthProvider,
+            signInWithPopup,
+            setPersistence,
+            browserLocalPersistence
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            onSnapshot, 
+            setDoc, 
+            collection,
+            query, 
+            where, 
+            getDocs,
+            deleteDoc
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // =========================================================================
-        // 🚨 ACTION REQUIRED 1: SET YOUR PRIVATE PASSCODE HERE 🚨
-        const SECRET_PASSCODE = "monşer"; // CHANGE THIS to your private code!
+        // IMPORTANT: Set log level for debugging Firebase operations
+        setLogLevel('debug');
         
-        // 🚨 ACTION REQUIRED 2: PASTE YOUR FIREBASE CONFIGURATION HERE 🚨
-        const MY_FIREBASE_CONFIG = {
-           apiKey: "AIzaSyCsNuUcV4U67P8TwgGZGzmFjhUkRwZ6QjM",
-           authDomain: "notebook-463e4.firebaseapp.com",
-           projectId: "notebook-463e4",
-           storageBucket: "notebook-463e4.firebasestorage.app",
-           messagingSenderId: "885400424886",
-           appId: "1:885400424886:web:c419ab84a16d7e433fb117",
-           measurementId: "G-9LHH3SXWQJ"
-        };
-        const FIREBASE_APP_ID = MY_FIREBASE_CONFIG.projectId || 'default-project'; 
-        
-        // Configuration loading logic (DO NOT CHANGE)
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : FIREBASE_APP_ID;
-        // =========================================================================
-
-        let db, auth;
+        let app;
+        let auth;
+        let db;
         let userId = null;
-        let notebooksCollection;
+        let notebooksRef = null;
+        let googleProvider;
+
+        // --- CONFIGURATION ---
         
-        let state = {
-            notebooks: [], 
-            currentNotebookId: null,
-            isAuthReady: false,
-            isAuthenticated: false // Tracks if user is actively signed in (not just auth ready)
+        // 🚨 ACTION REQUIRED: Replace these placeholder values with your ACTUAL 
+        // Firebase Web App credentials from your console.
+        const MY_FIREBASE_CONFIG = {
+           apiKey: "YOUR_API_KEY_HERE",
+           authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+           projectId: "YOUR_PROJECT_ID",
+           storageBucket: "YOUR_PROJECT_ID.appspot.com",
+           messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+           appId: "YOUR_APP_ID"
         };
-
-        // --- UI Elements ---
-        const authStatusDisplay = document.getElementById('authStatusDisplay');
-        const notebookSelector = document.getElementById('notebookSelector');
-        const totalSumDisplay = document.getElementById('totalSumDisplay');
-        const newEntryInput = document.getElementById('newEntryInput');
-        const addEntryBtn = document.getElementById('addEntryBtn');
-        const entryList = document.getElementById('entryList');
-        const addNotebookBtn = document.getElementById('addNotebookBtn');
-        const deleteNotebookBtn = document.getElementById('deleteNotebookBtn');
-        const initialLoading = document.getElementById('initialLoading');
-        const passcodePanel = document.getElementById('passcodePanel');
-        const appControls = document.getElementById('appControls');
-        const passcodeInput = document.getElementById('passcodeInput');
-        const passcodeSubmitBtn = document.getElementById('passcodeSubmitBtn');
-        const passcodeError = document.getElementById('passcodeError');
-        const signOutBtn = document.getElementById('signOutBtn');
-
-        // Modal Elements
-        const modalOverlay = document.getElementById('modalOverlay');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalMessage = document.getElementById('modalMessage');
-        const modalInput = document.getElementById('modalInput');
-        const modalCancelBtn = document.getElementById('modalCancelBtn');
-        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
         
-        // --- Core Firebase and State Management ---
+        // --- APP STATE ---
+        const appId = "number-notebook-v1"; // Fixed App Identifier for Firestore path
+        let notebooks = [];
+        let currentNotebookId = null;
 
-        function getCurrentNotebook() {
-            return state.notebooks.find(n => n.id === state.currentNotebookId);
+        // --- DOM ELEMENTS ---
+        const notebookSelect = document.getElementById('notebookSelect');
+        const entryList = document.getElementById('entryList');
+        const newEntryInput = document.getElementById('newEntryInput');
+        const totalSumDisplay = document.getElementById('totalSum');
+        const signOutBtn = document.getElementById('signOutBtn');
+        const appUi = document.getElementById('appUi');
+        const authGate = document.getElementById('authGate');
+        const signInBtn = document.getElementById('signInBtn');
+        const signInError = document.getElementById('signInError');
+        const currentUserIdDisplay = document.getElementById('currentUserIdDisplay');
+        const notebookContainer = document.getElementById('notebookContainer');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        // --- FIREBASE INITIALIZATION AND AUTH ---
+
+        function updateAuthStatus(user) {
+            if (user) {
+                userId = user.uid;
+                notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
+                currentUserIdDisplay.textContent = `User: ${user.email || 'Anonymous'}`;
+                
+                // Show/hide sign out button based on if user is permanent
+                if (user.isAnonymous) {
+                     signOutBtn.classList.add('hidden');
+                     // If still anonymous, prompt to upgrade
+                     currentUserIdDisplay.textContent = `User: Anonymous (Upgrade Recommended)`;
+                } else {
+                     signOutBtn.classList.remove('hidden');
+                }
+
+                appUi.classList.remove('hidden');
+                authGate.classList.add('hidden');
+                
+                // Start listening for data only after successful authentication
+                startDataListener();
+
+            } else {
+                userId = null;
+                currentUserIdDisplay.textContent = 'Status: Not Signed In';
+                notebooksRef = null;
+                appUi.classList.add('hidden');
+                authGate.classList.remove('hidden');
+                notebooks = []; // Clear local data
+                currentNotebookId = null;
+                renderEntryList();
+                renderNotebooks();
+            }
         }
 
         async function setupFirebase() {
-            setLogLevel('debug');
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            // 1. Check for custom token (Dev Environment ONLY)
-            if (initialAuthToken) {
-                try {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } catch (error) {
-                    console.error("Custom token sign-in failed:", error);
-                }
-            }
-            
-            // 2. Set up the listener first
-            onAuthStateChanged(auth, async (user) => {
-                state.isAuthReady = true;
+            try {
+                app = initializeApp(MY_FIREBASE_CONFIG);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                googleProvider = new GoogleAuthProvider(); // Initialize Google provider
+                setPersistence(auth, browserLocalPersistence); // Always set persistence
 
-                if (user) {
-                    // User is signed in (anonymously in this case)
-                    userId = user.uid;
-                    state.isAuthenticated = true;
-                    
-                    updateAuthStatus(user);
-
-                    notebooksCollection = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
-                    setupRealtimeListener();
-                    
-                } else {
-                    // User is not signed in or has signed out (Lock Screen)
-                    state.isAuthenticated = false;
-                    userId = null;
-                    
-                    // Show lock screen, hide app controls
-                    appControls.classList.add('hidden');
-                    passcodePanel.classList.remove('hidden');
-                    signOutBtn.classList.add('hidden');
-                    initialLoading.classList.add('hidden');
-                    authStatusDisplay.innerHTML = `Status: <span class="text-red-500 font-bold">Locked.</span>`;
-                    updateUI(false); 
-                }
-            });
-
-        }
-        
-        function updateAuthStatus(user) {
-            if (user && user.isAnonymous) {
-                authStatusDisplay.innerHTML = `Status: Signed in (ID: <span class="font-bold">${user.uid.substring(0, 8)}...</span>)`;
-                signOutBtn.classList.remove('hidden');
-                appControls.classList.remove('hidden');
-                passcodePanel.classList.add('hidden');
-            } else {
-                authStatusDisplay.innerHTML = `Status: Not Signed In.`;
-            }
-        }
-
-        async function handlePasscodeSubmit() {
-            const code = passcodeInput.value.trim();
-            if (code === SECRET_PASSCODE) {
-                passcodeError.classList.add('hidden');
-                passcodeSubmitBtn.disabled = true;
-                passcodeSubmitBtn.textContent = "Signing In...";
+                loadingIndicator.textContent = "Connecting to cloud...";
+                loadingIndicator.classList.remove('hidden');
                 
-                try {
-                    // Sign in anonymously to create a user session tied to this device
-                    await signInAnonymously(auth);
-                    // onAuthStateChanged listener will fire and handle UI update
-                } catch (error) {
-                    console.error("Firebase Auth Error:", error);
-                    passcodeError.textContent = "Firebase Error: Could not sign in. Check console/config.";
-                    passcodeError.classList.remove('hidden');
-                    passcodeSubmitBtn.disabled = false;
-                    passcodeSubmitBtn.textContent = "Verify & Sign In";
-                }
-            } else {
-                passcodeError.textContent = "Invalid passcode. Try again.";
-                passcodeError.classList.remove('hidden');
-                passcodeInput.value = '';
-                passcodeSubmitBtn.disabled = false;
+                // Listen for auth state changes (handles auto-login on refresh)
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        updateAuthStatus(user);
+                        loadingIndicator.classList.add('hidden');
+                    } else {
+                        loadingIndicator.classList.add('hidden');
+                        updateAuthStatus(null);
+                    }
+                });
+
+                // Since we removed automatic Anonymous sign-in, the UI will wait for user interaction (Sign In).
+                
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                loadingIndicator.textContent = `Initialization Error: ${error.message}`;
             }
         }
-        
-        function handlePasscodeInputChange() {
-            passcodeSubmitBtn.disabled = passcodeInput.value.trim().length === 0;
-            passcodeError.classList.add('hidden');
-        }
-        
+
         async function handleSignOut() {
-            if (!auth) return;
             try {
                 await signOut(auth);
-                // onAuthStateChanged listener will handle the UI update (showing passcode panel)
+                // onAuthStateChanged will handle the UI update
             } catch (error) {
                 console.error("Sign Out Error:", error);
             }
         }
-
-
-        function setupRealtimeListener() {
-            if (!notebooksCollection) return;
-
-            onSnapshot(query(notebooksCollection), (snapshot) => {
-                state.notebooks = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                
-                if (state.notebooks.length === 0) {
-                    createDefaultNotebook();
-                    return; 
-                }
-
-                if (!state.currentNotebookId || !state.notebooks.find(n => n.id === state.currentNotebookId)) {
-                    state.currentNotebookId = state.notebooks[0].id;
-                }
-
-                updateUI(true);
-                initialLoading.classList.add('hidden');
-            }, (error) => {
-                console.error("Firestore Listener Error:", error);
-                // Note: The data load failed, likely due to security rules
-                initialLoading.innerHTML = `<li class="text-red-500 text-center py-4">Connection Error: Could not load data. Check Firebase Security Rules.</li>`;
-                updateUI(false);
-            });
-        }
-
-        async function createDefaultNotebook() {
-            if (state.notebooks.length === 0 && state.isAuthenticated && notebooksCollection) {
-                try {
-                    await setDoc(doc(notebooksCollection), {
-                        name: "Default Notebook",
-                        entries: [],
-                        timestamp: serverTimestamp()
-                    });
-                } catch (e) {
-                    console.error("Error creating default notebook:", e);
-                }
-            }
-        }
-
-        // --- Render Functions ---
-
-        function updateSum() {
-            const currentNotebook = getCurrentNotebook();
-            if (!currentNotebook || !currentNotebook.entries) {
-                totalSumDisplay.textContent = '$0.00';
-                return;
-            }
-
-            const sum = currentNotebook.entries.reduce((acc, entry) => acc + (entry.value || 0), 0);
-            totalSumDisplay.textContent = `$${sum.toFixed(2)}`;
-        }
-
-        function renderNotebookList() {
-            notebookSelector.innerHTML = '';
+        
+        async function handleGoogleSignIn() {
+            signInBtn.disabled = true;
+            signInError.textContent = '';
             
-            state.notebooks.forEach(notebook => {
-                const option = document.createElement('option');
-                option.value = notebook.id;
-                option.textContent = notebook.name;
-                if (notebook.id === state.currentNotebookId) {
-                    option.selected = true;
+            try {
+                signInError.textContent = "Signing in...";
+                
+                // 1. Set persistence (already done in setup, but harmless to repeat)
+                await setPersistence(auth, browserLocalPersistence);
+                
+                // 2. Perform the sign-in with a pop-up
+                await signInWithPopup(auth, googleProvider);
+                
+                // The onAuthStateChanged listener handles the rest.
+                
+            } catch (error) {
+                // Handle the common error when the user cancels the pop-up
+                if (error.code === 'auth/popup-closed-by-user') {
+                    signInError.textContent = "Sign in cancelled.";
+                } else if (error.code === 'auth/cancelled-popup-request') {
+                     signInError.textContent = "Sign in attempt cancelled.";
+                } else {
+                    signInError.textContent = `Sign In Failed: ${error.message}`;
+                    console.error("Google Sign-In Error:", error);
                 }
-                notebookSelector.appendChild(option);
+            } finally {
+                signInBtn.disabled = false;
+            }
+        }
+
+
+        // --- FIRESTORE DATA HANDLING ---
+
+        function getNotebookPath(id) {
+            return doc(notebooksRef, id);
+        }
+
+        function getCurrentNotebook() {
+            return notebooks.find(nb => nb.id === currentNotebookId);
+        }
+
+        async function saveNotebooksToFirestore(notebooksToSave) {
+            if (!userId) return; // Should not happen if UI is visible
+            
+            // Save the list of notebooks metadata (names, IDs)
+            await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList'), { list: notebooksToSave.map(n => ({ id: n.id, name: n.name })) });
+
+            // Save the current state of ALL notebooks (content)
+            for (const notebook of notebooksToSave) {
+                await setDoc(getNotebookPath(notebook.id), { entries: notebook.entries, name: notebook.name });
+            }
+        }
+
+        function createDefaultNotebook() {
+            const defaultId = `default-${Date.now()}`;
+            const defaultNotebook = {
+                id: defaultId,
+                name: "Primary Notebook",
+                entries: []
+            };
+            notebooks.push(defaultNotebook);
+            currentNotebookId = defaultId;
+            saveNotebooksToFirestore(notebooks); // Trigger initial save
+        }
+
+        // --- REAL-TIME DATA LISTENER ---
+
+        function startDataListener() {
+            if (!notebooksRef) return;
+
+            // 1. Listen for the list of Notebook IDs (metadata)
+            const listDocRef = doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList');
+            onSnapshot(listDocRef, (docSnapshot) => {
+                const listData = docSnapshot.data();
+                if (listData && listData.list && listData.list.length > 0) {
+                    const listIds = listData.list.map(item => item.id);
+                    // 2. Listen to individual notebook data for all found IDs
+                    listIds.forEach(id => listenToNotebookContent(id));
+                    
+                    // Set up local state for new or deleted notebooks
+                    notebooks = listData.list.map(item => notebooks.find(n => n.id === item.id) || { id: item.id, name: item.name, entries: [] });
+                    
+                    if (!currentNotebookId || !notebooks.some(n => n.id === currentNotebookId)) {
+                         currentNotebookId = listIds[0];
+                    }
+                    renderNotebooks();
+                    renderEntryList();
+                } else if (!docSnapshot.exists() && notebooks.length === 0) {
+                    // Create default only if metadata doesn't exist and we have no local state
+                    createDefaultNotebook();
+                }
+            }, (error) => {
+                console.error("Error fetching notebook list:", error);
+                totalSumDisplay.textContent = `Error connecting to cloud. Did you set Firestore Rules?`;
+            });
+        }
+        
+        function listenToNotebookContent(id) {
+            const notebookDocRef = getNotebookPath(id);
+            onSnapshot(notebookDocRef, (docSnapshot) => {
+                const data = docSnapshot.data();
+                if (data) {
+                    const existingNotebook = notebooks.find(n => n.id === id);
+                    if (existingNotebook) {
+                        existingNotebook.entries = data.entries || [];
+                        existingNotebook.name = data.name || existingNotebook.name;
+                    } else {
+                        // This should be handled by the list listener, but acts as a fallback
+                        notebooks.push({ id, name: data.name, entries: data.entries || [] });
+                    }
+                    if (id === currentNotebookId) {
+                        renderEntryList();
+                    }
+                    renderNotebooks(); // In case name changed
+                }
+            }, (error) => {
+                console.error(`Error fetching notebook ${id}:`, error);
+            });
+        }
+
+        // --- RENDER FUNCTIONS ---
+
+        function calculateTotalSum(entries) {
+            return entries.reduce((sum, entry) => sum + entry.value, 0).toFixed(2);
+        }
+
+        function renderNotebooks() {
+            notebookSelect.innerHTML = '';
+            
+            notebooks.forEach(nb => {
+                const option = document.createElement('option');
+                option.value = nb.id;
+                option.textContent = nb.name;
+                option.selected = nb.id === currentNotebookId;
+                notebookSelect.appendChild(option);
             });
 
-            const hasNotebooks = state.notebooks.length > 0;
-            const canDelete = state.notebooks.length > 1;
-
-            addNotebookBtn.disabled = !state.isAuthenticated;
-            deleteNotebookBtn.disabled = !state.isAuthenticated || !canDelete;
-            addEntryBtn.disabled = !state.isAuthenticated || !hasNotebooks;
-            newEntryInput.disabled = !state.isAuthenticated || !hasNotebooks;
+            // Display current notebook name in the header
+            const currentNb = getCurrentNotebook();
+            if(currentNb) {
+                 notebookContainer.querySelector('h2').textContent = currentNb.name;
+            }
         }
 
         function renderEntryList() {
             entryList.innerHTML = '';
-            const currentNotebook = getCurrentNotebook();
-
-            if (!currentNotebook || !currentNotebook.entries || currentNotebook.entries.length === 0) {
-                entryList.innerHTML = '<li class="text-gray-500 text-center py-4">No entries yet. Add a number above!</li>';
+            const currentNb = getCurrentNotebook();
+            
+            if (!currentNb) {
+                totalSumDisplay.textContent = '0.00';
                 return;
             }
 
-            currentNotebook.entries.slice().reverse().forEach(entry => {
+            currentNb.entries.forEach(entry => {
                 const li = document.createElement('li');
-                li.className = 'py-3 flex justify-between items-center text-gray-700 group hover:bg-gray-50 px-2 rounded';
-                li.setAttribute('data-id', entry.id);
+                li.className = 'flex justify-between items-center py-2 border-b last:border-b-0 text-lg';
                 
-                const entryValue = entry.value || 0;
-                const formattedValue = `$${entryValue.toFixed(2)}`;
-                // Convert Firestore Timestamp object to JS Date if necessary
-                const dateMs = entry.timestamp && entry.timestamp.seconds ? entry.timestamp.seconds * 1000 : entry.timestamp || Date.now();
-                const formattedDate = new Date(dateMs).toLocaleDateString();
+                // Value and Timestamp
+                const entryContent = document.createElement('span');
+                entryContent.className = 'flex-1 flex flex-col sm:flex-row sm:justify-between';
+                
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'font-bold text-gray-800';
+                valueSpan.textContent = `$${entry.value.toFixed(2)}`;
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'text-sm text-gray-500 mt-0.5 sm:mt-0';
+                timeSpan.textContent = new Date(entry.timestamp).toLocaleString();
 
-                li.innerHTML = `
-                    <div class="flex-grow">
-                        <span class="text-lg font-medium text-primary">${formattedValue}</span>
-                        <span class="text-xs text-gray-400 ml-2">(${formattedDate})</span>
-                    </div>
-                    <button data-id="${entry.id}" class="delete-entry-btn text-red-400 opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-red-100 transition duration-150" aria-label="Delete entry">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                `;
+                entryContent.appendChild(valueSpan);
+                entryContent.appendChild(timeSpan);
+                li.appendChild(entryContent);
+
+                // Delete button
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'ml-4 p-2 text-red-500 hover:text-red-700 transition duration-150 rounded-full hover:bg-red-50';
+                deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>`;
+                deleteButton.onclick = () => handleDeleteEntry(entry.timestamp);
+                li.appendChild(deleteButton);
+
                 entryList.appendChild(li);
             });
+
+            totalSumDisplay.textContent = calculateTotalSum(currentNb.entries);
         }
-        
-        // Accepts a boolean to fully enable/disable app functionality
-        function updateUI(enabled) {
-            renderNotebookList();
+
+        // --- USER ACTIONS ---
+
+        function handleSelectNotebook(event) {
+            currentNotebookId = event.target.value;
             renderEntryList();
-            updateSum();
-            
-            // Lock down input fields if not enabled
-            addNotebookBtn.disabled = !enabled || (state.notebooks.length === 0);
-            deleteNotebookBtn.disabled = !enabled || (state.notebooks.length <= 1);
-            addEntryBtn.disabled = !enabled || (state.notebooks.length === 0);
-            newEntryInput.disabled = !enabled;
-            notebookSelector.disabled = !enabled;
-
-            if (!enabled) {
-                notebookSelector.innerHTML = '<option>---</option>';
-                totalSumDisplay.textContent = '$0.00';
-                entryList.innerHTML = '';
-            }
         }
 
-        // --- Firebase Write Operations (CRUD) ---
+        function handleAddEntry() {
+            const valueStr = newEntryInput.value.trim();
+            const value = parseFloat(valueStr);
 
-        async function handleAddEntry() {
-            const value = parseFloat(newEntryInput.value);
             if (isNaN(value) || value === 0) {
-                newEntryInput.classList.add('border-red-500');
-                setTimeout(() => newEntryInput.classList.remove('border-red-500'), 500);
+                newEntryInput.value = '';
                 return;
             }
+            
+            const currentNb = getCurrentNotebook();
+            if (!currentNb) return;
+            
+            const newEntry = {
+                value: value,
+                timestamp: Date.now() 
+            };
+            
+            // Add entry to the beginning (LIFO for display)
+            currentNb.entries.unshift(newEntry);
+            newEntryInput.value = '';
+            newEntryInput.focus();
+            
+            // Push update to Firestore
+            setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
+                .catch(e => console.error("Error saving entry:", e));
+        }
 
-            const currentNotebook = getCurrentNotebook();
-            if (currentNotebook && notebooksCollection) {
-                const updatedEntries = [
-                    ...(currentNotebook.entries || []),
-                    { id: crypto.randomUUID(), value: value, timestamp: Date.now() }
-                ];
-
-                try {
-                    await setDoc(doc(notebooksCollection, currentNotebook.id), {
-                        ...currentNotebook,
-                        entries: updatedEntries
-                    });
-                    newEntryInput.value = '';
-                } catch (e) {
-                    console.error("Error adding entry:", e);
-                }
+        function handleDeleteEntry(timestamp) {
+            const currentNb = getCurrentNotebook();
+            if (!currentNb) return;
+            
+            const initialLength = currentNb.entries.length;
+            
+            // Filter out the entry with the matching timestamp
+            currentNb.entries = currentNb.entries.filter(entry => entry.timestamp !== timestamp);
+            
+            if (currentNb.entries.length !== initialLength) {
+                 // Push update to Firestore
+                setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
+                    .catch(e => console.error("Error deleting entry:", e));
             }
-        }
-
-        async function handleDeleteEntry(event) {
-            const button = event.target.closest('.delete-entry-btn');
-            if (!button) return;
-
-            const entryIdToDelete = button.getAttribute('data-id');
-            const currentNotebook = getCurrentNotebook();
-
-            if (currentNotebook && notebooksCollection) {
-                const updatedEntries = (currentNotebook.entries || []).filter(e => e.id !== entryIdToDelete);
-                
-                try {
-                    await setDoc(doc(notebooksCollection, currentNotebook.id), {
-                        ...currentNotebook,
-                        entries: updatedEntries
-                    });
-                } catch (e) {
-                    console.error("Error deleting entry:", e);
-                }
-            }
-        }
-
-        async function handleNotebookChange() {
-            state.currentNotebookId = notebookSelector.value;
-            updateUI(true);
-        }
-
-        // --- Modal Logic (CRUD remains same) ---
-
-        let activeModalType = ''; 
-
-        function openNewNotebookModal() {
-            activeModalType = 'new';
-            modalTitle.textContent = 'Create New Notebook';
-            modalMessage.textContent = 'Enter a name for your new notebook:';
-            modalInput.type = 'text';
-            modalInput.placeholder = 'e.g., Monthly Budget';
-            modalConfirmBtn.textContent = 'Create';
-            modalInput.value = '';
-            modalInput.classList.remove('hidden');
-            modalConfirmBtn.disabled = true;
-            modalOverlay.classList.remove('hidden');
-            modalInput.focus();
-        }
-
-        function openDeleteNotebookModal() {
-            const canDelete = state.notebooks.length > 1;
-            if (!canDelete) return;
-
-            activeModalType = 'delete';
-            const notebook = getCurrentNotebook();
-            modalTitle.textContent = 'Confirm Deletion';
-            modalMessage.innerHTML = `Are you sure you want to delete the notebook: <strong>"${notebook.name}"</strong>? This action cannot be undone.`;
-            modalInput.classList.add('hidden');
-            modalConfirmBtn.textContent = 'Delete';
-            modalConfirmBtn.disabled = false;
-            modalOverlay.classList.remove('hidden');
         }
         
-        function closeModal() {
-            modalOverlay.classList.add('hidden');
-            modalInput.value = '';
-            activeModalType = '';
-        }
-
-        async function handleModalConfirm() {
-            if (!notebooksCollection) return;
-
-            if (activeModalType === 'new') {
-                const name = modalInput.value.trim();
-                if (name) {
-                    try {
-                        await setDoc(doc(notebooksCollection), {
-                            name: name,
-                            entries: [],
-                            timestamp: serverTimestamp()
-                        });
-                        closeModal();
-                    } catch (e) {
-                        console.error("Error creating notebook:", e);
-                    }
-                }
-            } else if (activeModalType === 'delete') {
-                const currentNotebook = getCurrentNotebook();
-                if (state.notebooks.length > 1 && currentNotebook) {
-                    try {
-                        await deleteDoc(doc(notebooksCollection, currentNotebook.id));
-                        closeModal();
-                    } catch (e) {
-                        console.error("Error deleting notebook:", e);
-                    }
-                } else {
-                    console.error('Cannot delete the last remaining notebook.');
-                    closeModal();
-                }
+        async function handleCreateNotebook() {
+            const newName = prompt("Enter a name for the new notebook:");
+            if (newName && newName.trim()) {
+                const newId = `nb-${Date.now()}`;
+                const newNotebook = {
+                    id: newId,
+                    name: newName.trim(),
+                    entries: []
+                };
+                
+                notebooks.push(newNotebook);
+                currentNotebookId = newId;
+                
+                // Update both metadata (list) and the new document
+                await saveNotebooksToFirestore(notebooks);
+                renderNotebooks();
+                renderEntryList();
             }
         }
 
-        function handleModalInputChange() {
-            if (activeModalType === 'new') {
-                modalConfirmBtn.disabled = modalInput.value.trim().length === 0;
+        async function handleDeleteNotebook() {
+            const currentNb = getCurrentNotebook();
+            if (!currentNb || notebooks.length === 1) {
+                alert("Cannot delete the last notebook.");
+                return;
             }
-        }
-
-        // --- Initialization and Event Binding ---
-
-        document.addEventListener('DOMContentLoaded', () => {
-            setupFirebase();
-
-            // Entry Handling
-            addEntryBtn.addEventListener('click', handleAddEntry);
-            newEntryInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handleAddEntry();
-            });
-            entryList.addEventListener('click', handleDeleteEntry);
             
-            // Notebook Handling
-            notebookSelector.addEventListener('change', handleNotebookChange);
-            addNotebookBtn.addEventListener('click', openNewNotebookModal);
-            deleteNotebookBtn.addEventListener('click', openDeleteNotebookModal);
+            const confirmed = confirm(`Are you sure you want to delete the notebook: "${currentNb.name}"? This action cannot be undone.`);
+            
+            if (confirmed) {
+                const index = notebooks.findIndex(nb => nb.id === currentNb.id);
+                if (index > -1) {
+                    // Remove from local list
+                    notebooks.splice(index, 1);
+                    
+                    // Set new current notebook before saving
+                    currentNotebookId = notebooks[0].id;
 
-            // Passcode Handling
-            passcodeSubmitBtn.addEventListener('click', handlePasscodeSubmit);
-            passcodeInput.addEventListener('input', handlePasscodeInputChange);
-            passcodeInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handlePasscodeSubmit();
-            });
+                    // Delete the document in Firestore
+                    await deleteDoc(getNotebookPath(currentNb.id)).catch(e => console.error("Error deleting document:", e));
+                    
+                    // Update the list metadata (this triggers the listener)
+                    await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList'), { list: notebooks.map(n => ({ id: n.id, name: n.name })) });
+                }
+            }
+        }
 
-            // Sign Out
-            signOutBtn.addEventListener('click', handleSignOut);
-
-            // Modal Handling
-            modalCancelBtn.addEventListener('click', closeModal);
-            modalConfirmBtn.addEventListener('click', handleModalConfirm);
-            modalInput.addEventListener('input', handleModalInputChange);
+        // --- EVENT LISTENERS ---
+        notebookSelect.addEventListener('change', handleSelectNotebook);
+        document.getElementById('addEntryBtn').addEventListener('click', handleAddEntry);
+        document.getElementById('newEntryInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleAddEntry();
         });
+        document.getElementById('createNotebookBtn').addEventListener('click', handleCreateNotebook);
+        document.getElementById('deleteNotebookBtn').addEventListener('click', handleDeleteNotebook);
+        signOutBtn.addEventListener('click', handleSignOut);
+        signInBtn.addEventListener('click', handleGoogleSignIn);
+
+        // --- START APP ---
+        setupFirebase();
     </script>
+    <style>
+        .auth-gate {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.98);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            text-align: center;
+        }
+        .app-container {
+            max-width: 500px;
+        }
+        .scrollable-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen p-4 sm:p-8">
     
+    <div class="app-container mx-auto bg-white rounded-xl shadow-2xl p-6 relative">
+        <!-- Auth Gate Screen (Sign In Prompt) -->
+        <div id="authGate" class="auth-gate hidden">
+            <div class="p-6 bg-white rounded-lg shadow-xl max-w-sm">
+                <h3 class="text-2xl font-bold mb-4 text-indigo-600">Welcome Back!</h3>
+                <p class="mb-6 text-gray-600">Please sign in to securely access your notebooks and cloud data.</p>
+                
+                <button id="signInBtn" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48px" height="48px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.158,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.096,4.671C14.17,17.152,15.821,16,17.707,16c2.51,0,4.858,1.605,5.925,3.905l5.882-6.19c-1.341-1.298-3.033-2.34-4.887-2.91C22.677,9.754,20.32,9,18,9c-4.664,0-8.877,1.868-11.97,4.961L6.306,14.691z"/><path fill="#4CAF50" d="M14.07,35.986c2.476,1.488,5.437,2.373,8.583,2.373c3.743,0,7.31-1.42,9.943-3.811l-5.753-4.305c-1.8,1.385-3.963,2.226-6.19,2.226c-3.411,0-6.402-1.637-8.381-4.046L14.07,35.986z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.126,1.066-0.672,2.072-1.503,2.868c-0.83,0.796-1.92,1.353-3.13,1.684l-5.753,4.305c3.007,2.776,7.245,4.409,11.882,4.409c5.118,0,9.954-1.66,13.27-5.068c3.315-3.409,5.006-7.859,5.006-12.871C48,15.4,45.856,12.288,43.611,20.083z"/></svg>
+                    Sign In with Google
+                </button>
+                <p id="signInError" class="text-sm text-red-500 mt-2 min-h-[1.25rem]"></p>
+            </div>
+        </div>
+
+        <!-- Main App UI -->
+        <div id="appUi" class="space-y-6 hidden">
+            <header class="flex justify-between items-center border-b pb-3">
+                <h1 class="text-2xl font-extrabold text-gray-900">
+                    <span class="text-indigo-600">#</span> Keeper
+                </h1>
+                <div class="flex space-x-2">
+                    <button id="signOutBtn" class="bg-gray-200 text-gray-700 text-sm font-medium py-1 px-3 rounded-full hover:bg-gray-300 transition duration-150">Sign Out</button>
+                </div>
+            </header>
+
+            <div id="userInfo" class="text-sm text-gray-500 bg-gray-50 p-2 rounded-lg">
+                <span id="currentUserIdDisplay">Status: Connecting...</span>
+                <div id="loadingIndicator" class="text-xs text-indigo-600 mt-1 hidden"></div>
+            </div>
+
+            <!-- Notebook Management -->
+            <div id="notebookContainer" class="space-y-3 p-4 bg-indigo-50 rounded-lg">
+                <h2 class="text-lg font-semibold text-indigo-800">Notebook Name</h2>
+                <select id="notebookSelect" class="w-full p-3 border border-indigo-300 rounded-lg bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <!-- Options populated by JS -->
+                </select>
+                <div class="flex space-x-2">
+                    <button id="createNotebookBtn" class="flex-1 bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
+                        + New Notebook
+                    </button>
+                    <button id="deleteNotebookBtn" class="flex-1 bg-red-500 text-white text-sm font-medium py-2 rounded-lg hover:bg-red-600 transition duration-150 shadow-md">
+                        Delete Current
+                    </button>
+                </div>
+            </div>
+
+            <!-- Number Entry -->
+            <div class="flex space-x-3">
+                <!-- Changed to type="tel" for better mobile keyboard experience -->
+                <input type="tel" id="newEntryInput" placeholder="Enter number (e.g., 45.99)"
+                       class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
+                <button id="addEntryBtn"
+                        class="bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
+                    Add
+                </button>
+            </div>
+
+            <!-- Entry List and Summary -->
+            <div class="border border-gray-200 rounded-lg">
+                <div class="scrollable-list">
+                    <ul id="entryList" class="p-4 divide-y divide-gray-100">
+                        <!-- Entries populated by JS -->
+                    </ul>
+                </div>
+                
+                <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
+                    <span class="text-xl font-bold text-gray-800">TOTAL:</span>
+                    <span id="totalSum" class="text-2xl font-extrabold text-indigo-600">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
