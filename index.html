@@ -9,15 +9,15 @@
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
-            signInWithCustomToken, 
             onAuthStateChanged, 
             signOut,
             GoogleAuthProvider,
             signInWithPopup,
             setPersistence,
-            browserLocalPersistence
+            browserLocalPersistence,
+            signInWithCredential
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
+        import { a
             getFirestore, 
             doc, 
             onSnapshot, 
@@ -77,16 +77,10 @@
             if (user) {
                 userId = user.uid;
                 notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
-                currentUserIdDisplay.textContent = `User: ${user.email || 'Anonymous'}`;
+                currentUserIdDisplay.textContent = `User: ${user.email || 'Permanent Session'}`;
                 
-                // Show/hide sign out button based on if user is permanent
-                if (user.isAnonymous) {
-                     signOutBtn.classList.add('hidden');
-                     // If still anonymous, prompt to upgrade
-                     currentUserIdDisplay.textContent = `User: Anonymous (Upgrade Recommended)`;
-                } else {
-                     signOutBtn.classList.remove('hidden');
-                }
+                // We assume any successful login (including Google) is permanent.
+                signOutBtn.classList.remove('hidden');
 
                 appUi.classList.remove('hidden');
                 authGate.classList.add('hidden');
@@ -128,8 +122,6 @@
                         updateAuthStatus(null);
                     }
                 });
-
-                // Since we removed automatic Anonymous sign-in, the UI will wait for user interaction (Sign In).
                 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
@@ -162,6 +154,20 @@
                 // The onAuthStateChanged listener handles the rest.
                 
             } catch (error) {
+                // Check if the credential is already in use (the scenario we fixed before)
+                if (error.code === 'auth/credential-already-in-use' && error.credential) {
+                    try {
+                        signInError.textContent = "Switching to existing permanent account...";
+                        // Sign the user into the existing permanent account
+                        await signInWithCredential(auth, error.credential);
+                        // The onAuthStateChanged listener handles the rest.
+                        return;
+                    } catch (reauthError) {
+                        console.error("Failed to sign in with existing credential:", reauthError);
+                        signInError.textContent = "Error switching accounts. Try clearing site data.";
+                    }
+                }
+                
                 // Handle the common error when the user cancels the pop-up
                 if (error.code === 'auth/popup-closed-by-user') {
                     signInError.textContent = "Sign in cancelled.";
