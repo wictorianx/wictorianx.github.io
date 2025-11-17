@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Number Notebook (Cloud Sync)</title>
+    <title>Simple Number Notebook (Passcode Locked)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -61,19 +61,11 @@
             background-position: right 0.7rem center;
             background-size: 1.5em;
         }
-        /* Custom Google button style for simplicity */
-        .google-btn {
-            background-color: #4285f4;
-            color: white;
-        }
-        .google-btn:hover {
-            background-color: #357ae8;
-        }
-        .account-status {
-            font-size: 0.8rem;
-            text-align: center;
-            padding-top: 1rem;
-            border-top: 1px solid #eee;
+        .passcode-container {
+            padding: 1.5rem;
+            border: 1px dashed #e5e7eb;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
         }
     </style>
 </head>
@@ -82,71 +74,87 @@
     <div class="app-container bg-white rounded-none sm:rounded-xl pt-6 px-4 pb-4 sm:p-6 space-y-6">
         <header class="pb-4 border-b border-gray-100">
             <h1 class="text-3xl font-extrabold text-primary text-center flex justify-center items-center">
-                <svg class="w-7 h-7 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z"></path></svg>
+                <svg class="w-7 h-7 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2m-2 4h2M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z"></path></svg>
                 Number Keeper
             </h1>
             <p id="authStatusDisplay" class="text-xs text-gray-500 text-center mt-1">Status: Checking authentication...</p>
         </header>
 
-        <!-- Notebook Selector & Actions -->
-        <div class="flex space-x-2">
-            <div class="relative flex-grow">
-                <select id="notebookSelector"
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 pr-10 bg-white font-medium text-gray-700">
-                    <!-- Options populated by JS -->
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-primary">
-                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 6.757 7.586 5.343 9z"/></svg>
+        <!-- Passcode Input Area (Shows when logged out) -->
+        <div id="passcodePanel" class="hidden">
+            <div class="passcode-container text-center space-y-3">
+                <p class="text-lg font-semibold text-gray-700">Access Restricted</p>
+                <p class="text-sm text-gray-500">Please enter the private passcode to access your notebooks.</p>
+                
+                <input type="password" id="passcodeInput" placeholder="Enter Passcode"
+                       class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 text-xl text-center">
+
+                <button id="passcodeSubmitBtn"
+                        class="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-secondary transition duration-300 shadow-xl disabled:opacity-50 disabled:shadow-none" disabled>
+                    Verify & Sign In
+                </button>
+                <p id="passcodeError" class="text-red-500 text-sm hidden">Invalid passcode. Try again.</p>
+            </div>
+        </div>
+
+        <!-- Notebook Selector & Actions (Hidden when locked) -->
+        <div id="appControls" class="space-y-6 hidden">
+            <div class="flex space-x-2">
+                <div class="relative flex-grow">
+                    <select id="notebookSelector"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 pr-10 bg-white font-medium text-gray-700">
+                        <!-- Options populated by JS -->
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-primary">
+                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 6.757 7.586 5.343 9z"/></svg>
+                    </div>
+                </div>
+                
+                <button id="addNotebookBtn" class="p-3 bg-secondary text-white rounded-lg hover:bg-primary transition duration-300 shadow-md flex items-center justify-center" aria-label="Add New Notebook" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+
+                <button id="deleteNotebookBtn" class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-300 shadow-md flex items-center justify-center disabled:opacity-50" aria-label="Delete Current Notebook" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
+
+            <!-- Current Sum Display -->
+            <div class="bg-primary/90 p-4 rounded-lg shadow-lg text-white">
+                <p class="text-sm font-light uppercase">Total Sum</p>
+                <p id="totalSumDisplay" class="text-4xl font-extrabold">$0.00</p>
+            </div>
+
+            <!-- Add Entry Form -->
+            <div class="space-y-4 pt-2">
+                <input type="number" id="newEntryInput" placeholder="Enter number (e.g., 42.50)" step="0.01"
+                       class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 text-xl"
+                       aria-label="New Number Entry" disabled>
+
+                <button id="addEntryBtn"
+                        class="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-secondary transition duration-300 shadow-xl disabled:opacity-50 disabled:shadow-none" disabled>
+                    Add Entry
+                </button>
+            </div>
+
+            <!-- Entry List -->
+            <div class="pt-4">
+                <h2 class="text-lg font-bold text-gray-700 mb-2">Entries</h2>
+                <div class="entry-list-container bg-white border border-gray-200 rounded-lg p-3">
+                    <ul id="entryList" class="divide-y divide-gray-100">
+                        <li id="initialLoading" class="text-gray-500 text-center py-4">
+                            <!-- Content loaded by JS -->
+                        </li>
+                    </ul>
                 </div>
             </div>
             
-            <button id="addNotebookBtn" class="p-3 bg-secondary text-white rounded-lg hover:bg-primary transition duration-300 shadow-md flex items-center justify-center" aria-label="Add New Notebook" disabled>
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            </button>
-
-            <button id="deleteNotebookBtn" class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-300 shadow-md flex items-center justify-center disabled:opacity-50" aria-label="Delete Current Notebook" disabled>
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
-        </div>
-
-        <!-- Current Sum Display -->
-        <div class="bg-primary/90 p-4 rounded-lg shadow-lg text-white">
-            <p class="text-sm font-light uppercase">Total Sum</p>
-            <p id="totalSumDisplay" class="text-4xl font-extrabold">$0.00</p>
-        </div>
-
-        <!-- Add Entry Form -->
-        <div class="space-y-4 pt-2">
-            <input type="number" id="newEntryInput" placeholder="Enter number (e.g., 42.50)" step="0.01"
-                   class="w-full p-3 border border-gray-300 rounded-lg focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 transition duration-150 text-xl"
-                   aria-label="New Number Entry" disabled>
-
-            <button id="addEntryBtn"
-                    class="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-secondary transition duration-300 shadow-xl disabled:opacity-50 disabled:shadow-none" disabled>
-                Add Entry
-            </button>
-        </div>
-
-        <!-- Entry List -->
-        <div class="pt-4">
-            <h2 class="text-lg font-bold text-gray-700 mb-2">Entries</h2>
-            <div class="entry-list-container bg-white border border-gray-200 rounded-lg p-3">
-                <ul id="entryList" class="divide-y divide-gray-100">
-                    <li id="initialLoading" class="text-gray-500 text-center py-4">
-                        <svg class="animate-spin h-5 w-5 mr-3 inline-block text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Connecting to cloud...
-                    </li>
-                </ul>
-            </div>
         </div>
         
-        <!-- Google Sign-in Option -->
+        <!-- Sign Out Button (Only visible when signed in anonymously) -->
         <div id="authPanel" class="account-status">
-            <button id="googleSignInBtn" class="px-4 py-2 google-btn font-semibold rounded-lg shadow-md hover:shadow-lg transition duration-200 hidden" disabled>
-                Upgrade Account with Google
+            <button id="signOutBtn" class="px-4 py-2 signout-btn font-semibold rounded-lg shadow-md hover:shadow-lg transition duration-200 hidden">
+                Sign Out
             </button>
         </div>
     </div>
@@ -167,16 +175,17 @@
     </div>
 
     <script type="module">
-        // --- Firebase Imports (Corrected Structure) ---
+        // --- Firebase Imports ---
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"; // Core App
-        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, GoogleAuthProvider, linkWithPopup, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // Auth
+        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // Auth
         import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Firestore
         // ===============================================
 
         // =========================================================================
-        // 🚨 ACTION REQUIRED: PASTE YOUR FIREBASE CONFIGURATION HERE 🚨
-        // You MUST replace these placeholder values with your actual project config.
-        // =========================================================================
+        // 🚨 ACTION REQUIRED 1: SET YOUR PRIVATE PASSCODE HERE 🚨
+        const SECRET_PASSCODE = "42069"; // CHANGE THIS to your private code!
+        
+        // 🚨 ACTION REQUIRED 2: PASTE YOUR FIREBASE CONFIGURATION HERE 🚨
         const MY_FIREBASE_CONFIG = {
            apiKey: "AIzaSyCsNuUcV4U67P8TwgGZGzmFjhUkRwZ6QjM",
            authDomain: "notebook-463e4.firebaseapp.com",
@@ -201,7 +210,8 @@
         let state = {
             notebooks: [], 
             currentNotebookId: null,
-            isAuthReady: false
+            isAuthReady: false,
+            isAuthenticated: false // Tracks if user is actively signed in (not just auth ready)
         };
 
         // --- UI Elements ---
@@ -214,7 +224,12 @@
         const addNotebookBtn = document.getElementById('addNotebookBtn');
         const deleteNotebookBtn = document.getElementById('deleteNotebookBtn');
         const initialLoading = document.getElementById('initialLoading');
-        const googleSignInBtn = document.getElementById('googleSignInBtn');
+        const passcodePanel = document.getElementById('passcodePanel');
+        const appControls = document.getElementById('appControls');
+        const passcodeInput = document.getElementById('passcodeInput');
+        const passcodeSubmitBtn = document.getElementById('passcodeSubmitBtn');
+        const passcodeError = document.getElementById('passcodeError');
+        const signOutBtn = document.getElementById('signOutBtn');
 
         // Modal Elements
         const modalOverlay = document.getElementById('modalOverlay');
@@ -224,8 +239,6 @@
         const modalCancelBtn = document.getElementById('modalCancelBtn');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
         
-        const googleProvider = new GoogleAuthProvider();
-
         // --- Core Firebase and State Management ---
 
         function getCurrentNotebook() {
@@ -238,62 +251,95 @@
             db = getFirestore(app);
             auth = getAuth(app);
             
-            // Flag to track if we need to manually sign in anonymously
-            let needsAnonSignIn = true;
-
             // 1. Check for custom token (Dev Environment ONLY)
             if (initialAuthToken) {
                 try {
                     await signInWithCustomToken(auth, initialAuthToken);
-                    needsAnonSignIn = false;
                 } catch (error) {
                     console.error("Custom token sign-in failed:", error);
                 }
             }
             
-            // 2. Check for existing session (permanent user)
-            // onAuthStateChanged will handle permanent sessions, so we only sign in
-            // anonymously if no permanent user is found by the listener.
-            
-            // 3. Set up the listener first
+            // 2. Set up the listener first
             onAuthStateChanged(auth, async (user) => {
+                state.isAuthReady = true;
+
                 if (user) {
+                    // User is signed in (anonymously in this case)
                     userId = user.uid;
-                    state.isAuthReady = true;
+                    state.isAuthenticated = true;
                     
                     updateAuthStatus(user);
 
                     notebooksCollection = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
                     setupRealtimeListener();
-                    needsAnonSignIn = false; // A user session was found (permanent or anonymous)
-                } else if (needsAnonSignIn) {
-                    // 4. If no user session was found (and it's not the dev environment) 
-                    //    and the anonymous session hasn't been created yet, create it now.
-                    try {
-                        await signInAnonymously(auth);
-                    } catch (error) {
-                        console.error("Firebase Auth Error: Failed to sign in anonymously.", error);
-                        authStatusDisplay.textContent = `Status: Auth Error. Check console!`;
-                        initialLoading.innerHTML = `<li class="text-red-500 text-center py-4">Error connecting to cloud. Did you enable Anonymous Auth?</li>`;
-                    }
+                    
                 } else {
-                    // User signed out, or failed to find any auth token.
-                    state.isAuthReady = true;
-                    authStatusDisplay.textContent = `Status: Logged Out`;
-                    updateUI();
+                    // User is not signed in or has signed out (Lock Screen)
+                    state.isAuthenticated = false;
+                    userId = null;
+                    
+                    // Show lock screen, hide app controls
+                    appControls.classList.add('hidden');
+                    passcodePanel.classList.remove('hidden');
+                    signOutBtn.classList.add('hidden');
+                    initialLoading.classList.add('hidden');
+                    authStatusDisplay.innerHTML = `Status: <span class="text-red-500 font-bold">Locked.</span>`;
+                    updateUI(false); 
                 }
             });
 
         }
         
         function updateAuthStatus(user) {
-            if (user.isAnonymous) {
-                authStatusDisplay.innerHTML = `Status: Signed in anonymously (ID: <span class="font-bold">${user.uid.substring(0, 8)}...</span>) <span class="text-red-500">(Not recoverable!)</span>`;
-                googleSignInBtn.classList.remove('hidden');
-                googleSignInBtn.disabled = false;
+            if (user && user.isAnonymous) {
+                authStatusDisplay.innerHTML = `Status: Signed in (ID: <span class="font-bold">${user.uid.substring(0, 8)}...</span>)`;
+                signOutBtn.classList.remove('hidden');
+                appControls.classList.remove('hidden');
+                passcodePanel.classList.add('hidden');
             } else {
-                authStatusDisplay.innerHTML = `Status: Signed in permanently as <span class="font-bold text-primary">${user.email || 'Google User'}</span>`;
-                googleSignInBtn.classList.add('hidden'); 
+                authStatusDisplay.innerHTML = `Status: Not Signed In.`;
+            }
+        }
+
+        async function handlePasscodeSubmit() {
+            const code = passcodeInput.value.trim();
+            if (code === SECRET_PASSCODE) {
+                passcodeError.classList.add('hidden');
+                passcodeSubmitBtn.disabled = true;
+                passcodeSubmitBtn.textContent = "Signing In...";
+                
+                try {
+                    // Sign in anonymously to create a user session tied to this device
+                    await signInAnonymously(auth);
+                    // onAuthStateChanged listener will fire and handle UI update
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                    passcodeError.textContent = "Firebase Error: Could not sign in. Check console/config.";
+                    passcodeError.classList.remove('hidden');
+                    passcodeSubmitBtn.disabled = false;
+                    passcodeSubmitBtn.textContent = "Verify & Sign In";
+                }
+            } else {
+                passcodeError.textContent = "Invalid passcode. Try again.";
+                passcodeError.classList.remove('hidden');
+                passcodeInput.value = '';
+                passcodeSubmitBtn.disabled = false;
+            }
+        }
+        
+        function handlePasscodeInputChange() {
+            passcodeSubmitBtn.disabled = passcodeInput.value.trim().length === 0;
+            passcodeError.classList.add('hidden');
+        }
+        
+        async function handleSignOut() {
+            if (!auth) return;
+            try {
+                await signOut(auth);
+                // onAuthStateChanged listener will handle the UI update (showing passcode panel)
+            } catch (error) {
+                console.error("Sign Out Error:", error);
             }
         }
 
@@ -316,17 +362,18 @@
                     state.currentNotebookId = state.notebooks[0].id;
                 }
 
-                updateUI();
+                updateUI(true);
                 initialLoading.classList.add('hidden');
             }, (error) => {
                 console.error("Firestore Listener Error:", error);
                 // Note: The data load failed, likely due to security rules
                 initialLoading.innerHTML = `<li class="text-red-500 text-center py-4">Connection Error: Could not load data. Check Firebase Security Rules.</li>`;
+                updateUI(false);
             });
         }
 
         async function createDefaultNotebook() {
-            if (state.notebooks.length === 0 && state.isAuthReady && notebooksCollection) {
+            if (state.notebooks.length === 0 && state.isAuthenticated && notebooksCollection) {
                 try {
                     await setDoc(doc(notebooksCollection), {
                         name: "Default Notebook",
@@ -368,10 +415,10 @@
             const hasNotebooks = state.notebooks.length > 0;
             const canDelete = state.notebooks.length > 1;
 
-            addNotebookBtn.disabled = !state.isAuthReady;
-            deleteNotebookBtn.disabled = !state.isAuthReady || !canDelete;
-            addEntryBtn.disabled = !state.isAuthReady || !hasNotebooks;
-            newEntryInput.disabled = !state.isAuthReady || !hasNotebooks;
+            addNotebookBtn.disabled = !state.isAuthenticated;
+            deleteNotebookBtn.disabled = !state.isAuthenticated || !canDelete;
+            addEntryBtn.disabled = !state.isAuthenticated || !hasNotebooks;
+            newEntryInput.disabled = !state.isAuthenticated || !hasNotebooks;
         }
 
         function renderEntryList() {
@@ -406,11 +453,25 @@
                 entryList.appendChild(li);
             });
         }
-
-        function updateUI() {
+        
+        // Accepts a boolean to fully enable/disable app functionality
+        function updateUI(enabled) {
             renderNotebookList();
             renderEntryList();
             updateSum();
+            
+            // Lock down input fields if not enabled
+            addNotebookBtn.disabled = !enabled || (state.notebooks.length === 0);
+            deleteNotebookBtn.disabled = !enabled || (state.notebooks.length <= 1);
+            addEntryBtn.disabled = !enabled || (state.notebooks.length === 0);
+            newEntryInput.disabled = !enabled;
+            notebookSelector.disabled = !enabled;
+
+            if (!enabled) {
+                notebookSelector.innerHTML = '<option>---</option>';
+                totalSumDisplay.textContent = '$0.00';
+                entryList.innerHTML = '';
+            }
         }
 
         // --- Firebase Write Operations (CRUD) ---
@@ -465,67 +526,8 @@
 
         async function handleNotebookChange() {
             state.currentNotebookId = notebookSelector.value;
-            updateUI();
+            updateUI(true);
         }
-
-        // --- Auth Operations (Sign-in / Upgrade) ---
-        
-        async function handleGoogleSignIn() {
-            if (!auth) return;
-            
-            googleSignInBtn.disabled = true;
-            authStatusDisplay.textContent = "Status: Upgrading account...";
-
-            try {
-                const user = auth.currentUser;
-                
-                if (user && user.isAnonymous) {
-                    // Try to link the Google account to the existing anonymous account
-                    await linkWithPopup(user, googleProvider);
-                    authStatusDisplay.textContent = "Status: Account upgraded successfully!";
-                } else {
-                    // Fallback sign-in for users who cleared cache/token
-                    await signInWithPopup(auth, googleProvider);
-                    authStatusDisplay.textContent = "Status: Signed in!";
-                }
-            } catch (error) {
-                // --- CUSTOM ERROR HANDLING FOR CREDENTIAL-ALREADY-IN-USE ---
-                if (error.code === 'auth/credential-already-in-use') {
-                    // This means the Google account is already linked to a permanent user.
-                    // We need to switch the session to that permanent user.
-                    
-                    const credential = GoogleAuthProvider.credentialFromError(error);
-
-                    // Check if we actually got a credential back
-                    if (!credential) {
-                        console.error("Link failed: Could not retrieve credential for sign-in.");
-                        authStatusDisplay.textContent = "Status: Sign-in failed (Credential Missing).";
-                        return;
-                    }
-
-                    try {
-                        // 1. Sign out the current anonymous user (to free up the session)
-                        await auth.signOut();
-                        
-                        // 2. Sign in directly as the permanent Google user
-                        await signInWithCredential(auth, credential);
-                        
-                        authStatusDisplay.textContent = "Status: Switched to permanent account!";
-                        return;
-                    } catch (signInError) {
-                        console.error("Sign-in Switch Failed:", signInError);
-                        authStatusDisplay.textContent = `Status: Sign-in switch failed.`;
-                    }
-                }
-                // -------------------------------------------------------------------
-
-                console.error("Google Sign-In Error:", error);
-                authStatusDisplay.textContent = `Status: Sign-in failed. Check console.`;
-            } finally {
-                googleSignInBtn.disabled = false;
-            }
-        }
-
 
         // --- Modal Logic (CRUD remains same) ---
 
@@ -621,8 +623,15 @@
             addNotebookBtn.addEventListener('click', openNewNotebookModal);
             deleteNotebookBtn.addEventListener('click', openDeleteNotebookModal);
 
-            // Auth Handling
-            googleSignInBtn.addEventListener('click', handleGoogleSignIn);
+            // Passcode Handling
+            passcodeSubmitBtn.addEventListener('click', handlePasscodeSubmit);
+            passcodeInput.addEventListener('input', handlePasscodeInputChange);
+            passcodeInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handlePasscodeSubmit();
+            });
+
+            // Sign Out
+            signOutBtn.addEventListener('click', handleSignOut);
 
             // Modal Handling
             modalCancelBtn.addEventListener('click', closeModal);
