@@ -6,7 +6,10 @@
     <title>Number Notebook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
+        // --- Core Firebase App ---
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        
+        // --- Firebase Authentication ---
         import { 
             getAuth, 
             onAuthStateChanged, 
@@ -17,15 +20,14 @@
             browserLocalPersistence,
             signInWithCredential
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { a
+        
+        // --- Firebase Firestore Database ---
+        import { 
             getFirestore, 
             doc, 
             onSnapshot, 
             setDoc, 
             collection,
-            query, 
-            where, 
-            getDocs,
             deleteDoc
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -523,8 +525,8 @@
 
             <!-- Number Entry -->
             <div class="flex space-x-3">
-                <!-- Changed to type="tel" for better mobile keyboard experience -->
-                <input type="tel" id="newEntryInput" placeholder="Enter number (e.g., 45.99)"
+                <!-- Switched back to type="text" to prevent input conflicts -->
+                <input type="text" id="newEntryInput" placeholder="Enter number (e.g., 45.99)"
                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
                 <button id="addEntryBtn"
                         class="bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
