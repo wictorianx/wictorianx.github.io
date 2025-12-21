@@ -43,18 +43,16 @@
 
         // --- CONFIGURATION ---
         
-        // 🚨 ACTION REQUIRED: Replace these placeholder values with your ACTUAL 
+        // 🚨 ACTION REQUIRED: Replace these EMPTY strings ("") with your ACTUAL 
         // Firebase Web App credentials from your console.
-        const MY_FIREBASE_CONFIG =
-  {
-  apiKey: "AIzaSyCsNuUcV4U67P8TwgGZGzmFjhUkRwZ6QjM",
-  authDomain: "notebook-463e4.firebaseapp.com",
-  projectId: "notebook-463e4",
-  storageBucket: "notebook-463e4.firebasestorage.app",
-  messagingSenderId: "885400424886",
-  appId: "1:885400424886:web:c419ab84a16d7e433fb117",
-  measurementId: "G-9LHH3SXWQJ"
-};
+        const FIREBASE_APP_CONFIG = {
+           apiKey: "", 
+           authDomain: "",
+           projectId: "",
+           storageBucket: "",
+           messagingSenderId: "",
+           appId: ""
+        };
         
         // --- APP STATE ---
         const appId = "number-notebook-v1"; // Fixed App Identifier for Firestore path
@@ -83,7 +81,6 @@
                 notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
                 currentUserIdDisplay.textContent = `User: ${user.email || 'Permanent Session'}`;
                 
-                // We assume any successful login (including Google) is permanent.
                 signOutBtn.classList.remove('hidden');
 
                 appUi.classList.remove('hidden');
@@ -91,6 +88,9 @@
                 
                 // Start listening for data only after successful authentication
                 startDataListener();
+
+                // Explicitly set focus to the input after successful login
+                newEntryInput.focus();
 
             } else {
                 userId = null;
@@ -107,7 +107,7 @@
 
         async function setupFirebase() {
             try {
-                app = initializeApp(MY_FIREBASE_CONFIG);
+                app = initializeApp(FIREBASE_APP_CONFIG);
                 auth = getAuth(app);
                 db = getFirestore(app);
                 googleProvider = new GoogleAuthProvider(); // Initialize Google provider
@@ -136,7 +136,6 @@
         async function handleSignOut() {
             try {
                 await signOut(auth);
-                // onAuthStateChanged will handle the UI update
             } catch (error) {
                 console.error("Sign Out Error:", error);
             }
@@ -148,23 +147,14 @@
             
             try {
                 signInError.textContent = "Signing in...";
-                
-                // 1. Set persistence (already done in setup, but harmless to repeat)
                 await setPersistence(auth, browserLocalPersistence);
-                
-                // 2. Perform the sign-in with a pop-up
                 await signInWithPopup(auth, googleProvider);
                 
-                // The onAuthStateChanged listener handles the rest.
-                
             } catch (error) {
-                // Check if the credential is already in use (the scenario we fixed before)
                 if (error.code === 'auth/credential-already-in-use' && error.credential) {
                     try {
-                        signInError.textContent = "Switching to existing permanent account...";
-                        // Sign the user into the existing permanent account
+                        signInError.textContent = "Switching to existing account...";
                         await signInWithCredential(auth, error.credential);
-                        // The onAuthStateChanged listener handles the rest.
                         return;
                     } catch (reauthError) {
                         console.error("Failed to sign in with existing credential:", reauthError);
@@ -172,7 +162,6 @@
                     }
                 }
                 
-                // Handle the common error when the user cancels the pop-up
                 if (error.code === 'auth/popup-closed-by-user') {
                     signInError.textContent = "Sign in cancelled.";
                 } else if (error.code === 'auth/cancelled-popup-request') {
@@ -198,12 +187,10 @@
         }
 
         async function saveNotebooksToFirestore(notebooksToSave) {
-            if (!userId) return; // Should not happen if UI is visible
+            if (!userId) return;
             
-            // Save the list of notebooks metadata (names, IDs)
             await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList'), { list: notebooksToSave.map(n => ({ id: n.id, name: n.name })) });
 
-            // Save the current state of ALL notebooks (content)
             for (const notebook of notebooksToSave) {
                 await setDoc(getNotebookPath(notebook.id), { entries: notebook.entries, name: notebook.name });
             }
@@ -218,7 +205,7 @@
             };
             notebooks.push(defaultNotebook);
             currentNotebookId = defaultId;
-            saveNotebooksToFirestore(notebooks); // Trigger initial save
+            saveNotebooksToFirestore(notebooks);
         }
 
         // --- REAL-TIME DATA LISTENER ---
@@ -226,16 +213,13 @@
         function startDataListener() {
             if (!notebooksRef) return;
 
-            // 1. Listen for the list of Notebook IDs (metadata)
             const listDocRef = doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList');
             onSnapshot(listDocRef, (docSnapshot) => {
                 const listData = docSnapshot.data();
                 if (listData && listData.list && listData.list.length > 0) {
                     const listIds = listData.list.map(item => item.id);
-                    // 2. Listen to individual notebook data for all found IDs
                     listIds.forEach(id => listenToNotebookContent(id));
                     
-                    // Set up local state for new or deleted notebooks
                     notebooks = listData.list.map(item => notebooks.find(n => n.id === item.id) || { id: item.id, name: item.name, entries: [] });
                     
                     if (!currentNotebookId || !notebooks.some(n => n.id === currentNotebookId)) {
@@ -244,12 +228,11 @@
                     renderNotebooks();
                     renderEntryList();
                 } else if (!docSnapshot.exists() && notebooks.length === 0) {
-                    // Create default only if metadata doesn't exist and we have no local state
                     createDefaultNotebook();
                 }
             }, (error) => {
                 console.error("Error fetching notebook list:", error);
-                totalSumDisplay.textContent = `Error connecting to cloud. Did you set Firestore Rules?`;
+                totalSumDisplay.textContent = `Error connecting to cloud.`;
             });
         }
         
@@ -263,13 +246,12 @@
                         existingNotebook.entries = data.entries || [];
                         existingNotebook.name = data.name || existingNotebook.name;
                     } else {
-                        // This should be handled by the list listener, but acts as a fallback
                         notebooks.push({ id, name: data.name, entries: data.entries || [] });
                     }
                     if (id === currentNotebookId) {
                         renderEntryList();
                     }
-                    renderNotebooks(); // In case name changed
+                    renderNotebooks();
                 }
             }, (error) => {
                 console.error(`Error fetching notebook ${id}:`, error);
@@ -293,7 +275,6 @@
                 notebookSelect.appendChild(option);
             });
 
-            // Display current notebook name in the header
             const currentNb = getCurrentNotebook();
             if(currentNb) {
                  notebookContainer.querySelector('h2').textContent = currentNb.name;
@@ -313,7 +294,6 @@
                 const li = document.createElement('li');
                 li.className = 'flex justify-between items-center py-2 border-b last:border-b-0 text-lg';
                 
-                // Value and Timestamp
                 const entryContent = document.createElement('span');
                 entryContent.className = 'flex-1 flex flex-col sm:flex-row sm:justify-between';
                 
@@ -329,7 +309,6 @@
                 entryContent.appendChild(timeSpan);
                 li.appendChild(entryContent);
 
-                // Delete button
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'ml-4 p-2 text-red-500 hover:text-red-700 transition duration-150 rounded-full hover:bg-red-50';
                 deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>`;
@@ -366,12 +345,10 @@
                 timestamp: Date.now() 
             };
             
-            // Add entry to the beginning (LIFO for display)
             currentNb.entries.unshift(newEntry);
             newEntryInput.value = '';
             newEntryInput.focus();
             
-            // Push update to Firestore
             setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
                 .catch(e => console.error("Error saving entry:", e));
         }
@@ -381,12 +358,9 @@
             if (!currentNb) return;
             
             const initialLength = currentNb.entries.length;
-            
-            // Filter out the entry with the matching timestamp
             currentNb.entries = currentNb.entries.filter(entry => entry.timestamp !== timestamp);
             
             if (currentNb.entries.length !== initialLength) {
-                 // Push update to Firestore
                 setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
                     .catch(e => console.error("Error deleting entry:", e));
             }
@@ -405,37 +379,9 @@
                 notebooks.push(newNotebook);
                 currentNotebookId = newId;
                 
-                // Update both metadata (list) and the new document
                 await saveNotebooksToFirestore(notebooks);
                 renderNotebooks();
                 renderEntryList();
-            }
-        }
-
-        async function handleDeleteNotebook() {
-            const currentNb = getCurrentNotebook();
-            if (!currentNb || notebooks.length === 1) {
-                alert("Cannot delete the last notebook.");
-                return;
-            }
-            
-            const confirmed = confirm(`Are you sure you want to delete the notebook: "${currentNb.name}"? This action cannot be undone.`);
-            
-            if (confirmed) {
-                const index = notebooks.findIndex(nb => nb.id === currentNb.id);
-                if (index > -1) {
-                    // Remove from local list
-                    notebooks.splice(index, 1);
-                    
-                    // Set new current notebook before saving
-                    currentNotebookId = notebooks[0].id;
-
-                    // Delete the document in Firestore
-                    await deleteDoc(getNotebookPath(currentNb.id)).catch(e => console.error("Error deleting document:", e));
-                    
-                    // Update the list metadata (this triggers the listener)
-                    await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList'), { list: notebooks.map(n => ({ id: n.id, name: n.name })) });
-                }
             }
         }
 
@@ -446,7 +392,6 @@
             if (e.key === 'Enter') handleAddEntry();
         });
         document.getElementById('createNotebookBtn').addEventListener('click', handleCreateNotebook);
-        document.getElementById('deleteNotebookBtn').addEventListener('click', handleDeleteNotebook);
         signOutBtn.addEventListener('click', handleSignOut);
         signInBtn.addEventListener('click', handleGoogleSignIn);
 
@@ -516,18 +461,14 @@
                     <!-- Options populated by JS -->
                 </select>
                 <div class="flex space-x-2">
-                    <button id="createNotebookBtn" class="flex-1 bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
+                    <button id="createNotebookBtn" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
                         + New Notebook
-                    </button>
-                    <button id="deleteNotebookBtn" class="flex-1 bg-red-500 text-white text-sm font-medium py-2 rounded-lg hover:bg-red-600 transition duration-150 shadow-md">
-                        Delete Current
                     </button>
                 </div>
             </div>
 
             <!-- Number Entry -->
             <div class="flex space-x-3">
-                <!-- Switched back to type="text" to prevent input conflicts -->
                 <input type="text" id="newEntryInput" placeholder="Enter number (e.g., 45.99)"
                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
                 <button id="addEntryBtn"
