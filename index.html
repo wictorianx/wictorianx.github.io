@@ -41,17 +41,14 @@
         let notebooksRef = null;
         let googleProvider;
 
-        // --- CONFIGURATION ---
-        
-        // 🚨 ACTION REQUIRED: Replace these EMPTY strings ("") with your ACTUAL 
-        // Firebase Web App credentials from your console.
+        // --- CONFIGURATION (RESTORED) ---
         const FIREBASE_APP_CONFIG = {
-           apiKey: "", 
-           authDomain: "",
-           projectId: "",
-           storageBucket: "",
-           messagingSenderId: "",
-           appId: ""
+           apiKey: "AIzaSyCsNuUcV4U67P8TwgGZGzmFjhUkRwZ6QjM",
+           authDomain: "notebook-463e4.firebaseapp.com",
+           projectId: "notebook-463e4",
+           storageBucket: "notebook-463e4.firebasestorage.app",
+           messagingSenderId: "885400424886",
+           appId: "1:885400424886:web:c419ab84a16d7e433fb117"
         };
         
         // --- APP STATE ---
@@ -469,7 +466,8 @@
 
             <!-- Number Entry -->
             <div class="flex space-x-3">
-                <input type="text" id="newEntryInput" placeholder="Enter number (e.g., 45.99)"
+                <!-- Standard text input with decimal keypad support -->
+                <input type="text" id="newEntryInput" placeholder="Enter number (e.g., 45.99)" inputmode="decimal"
                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
                 <button id="addEntryBtn"
                         class="bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
