@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shadow Syndicate: Pure Canvas v9.8</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            color: #0f6;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        #audio-init {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 20, 0, 0.95);
+            border: 2px solid #0f6;
+            color: #0f6;
+            padding: 25px;
+            z-index: 1000;
+            text-align: center;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(0, 255, 100, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="audio-init">ESTABLISH ENCRYPTED AUDIO LINK<br>[ INITIALIZE NEURAL INTERFACE ]</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/**
+ * SHADOW SYNDICATE ENGINE v9.8
+ * Generative Digital Theme & Green UI Restoration
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- AUDIO SYSTEM (Procedural Techno Synth) ---
+let audioCtx = null;
+let nextBeatTime = 0;
+let beatCount = 0;
+const audioInitBtn = document.getElementById('audio-init');
+
+function initAudio() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        audioCtx = new AudioContextClass();
+        audioInitBtn.style.display = 'none';
+        nextBeatTime = audioCtx.currentTime;
+        scheduler();
+    } catch(e) {
+        audioInitBtn.style.display = 'none';
+    }
+}
+
+function playKick(time) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+    gain.gain.setValueAtTime(0.4, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(time); osc.stop(time + 0.5);
+}
+
+function playHats(time) {
+    const bufferSize = audioCtx.sampleRate * 0.1;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 7000;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.05, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    noise.start(time);
+}
+
+function playBass(time, freq) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, time);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, time);
+    gain.gain.setValueAtTime(0.1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(time); osc.stop(time + 0.2);
+}
+
+function scheduler() {
+    if (!audioCtx) return;
+    while (nextBeatTime < audioCtx.currentTime + 0.1) {
+        const mSpeed = 1 + (state.heat / 30);
+        const bpm = 80 + (mSpeed * 15);
+        const stepTime = 60 / bpm / 2; // 8th notes
+
+        // Kick on every 1 and 3
+        if (beatCount % 4 === 0) playKick(nextBeatTime);
+        
+        // Hats on every offbeat
+        if (beatCount % 2 === 1) playHats(nextBeatTime);
+
+        // Bass pattern
+        if (beatCount % 4 === 0) playBass(nextBeatTime, 40);
+        if (beatCount % 4 === 2) playBass(nextBeatTime, 45);
+        if (beatCount % 8 === 7) playBass(nextBeatTime, 30);
+
+        beatCount++;
+        nextBeatTime += stepTime;
+    }
+    setTimeout(scheduler, 25);
+}
+
+// --- PIXEL SKULL DATA ---
+const skullPixels = [
+    [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,3,3,3,1,1,1,1,3,3,3,1,1,1],
+    [1,1,3,3,3,3,3,1,1,3,3,3,3,3,1,1],
+    [1,1,3,3,3,3,3,1,1,3,3,3,3,3,1,1],
+    [1,1,1,3,3,3,1,1,1,1,3,3,3,1,1,1],
+    [0,1,1,1,1,1,3,3,3,3,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,3,3,1,1,1,1,1,0,0],
+    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+    [0,0,0,1,1,2,1,2,1,2,1,2,1,1,0,0],
+    [0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0],
+    [0,0,0,0,1,1,2,1,2,1,2,1,1,0,0,0],
+    [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+    [0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0]
+];
+
+// --- CONSTANTS ---
+const sidebarWidthDesktop = 320;
+const priceGrowth = 1.15; 
+const buyModes = [1, 10, 100, 'MAX'];
+
+const industries = [
+    { name: 'Faith Farming', icon: '⛪', basePrice: 15, baseIncome: 1, color: '#FFD700' },
+    { name: 'Chem-Net', icon: '💊', basePrice: 100, baseIncome: 5, color: '#39FF14' },
+    { name: 'Organic Arbitrage', icon: '🫀', basePrice: 1100, baseIncome: 12, color: '#FF3E3E' },
+    { name: 'Human Logistics', icon: '⛓️', basePrice: 12000, baseIncome: 47, color: '#A020F0' },
+    { name: 'Market Ghosting', icon: '📈', basePrice: 130000, baseIncome: 155, color: '#00D4FF' },
+    { name: 'Data Ransom', icon: '💻', basePrice: 1400000, baseIncome: 650, color: '#FFFFFF' },
+    { name: 'Warlord Consulting', icon: '⚔️', basePrice: 20000000, baseIncome: 2800, color: '#8B4513' },
+    { name: 'Omega Protocol', icon: '☢️', basePrice: 500000000, baseIncome: 18000, color: '#FF8C00' }
+];
+
+// --- STATE ---
+let state = {
+    money: 0, heat: 0, shadowInfluence: 1, owned: new Array(industries.length).fill(0),
+    buyModeIndex: 0, clickValue: 1, clickUpgradeLevel: 0, particles: [], lastUpdate: Date.now(),
+    isMobile: false, scrollOffset: 0, targetScrollOffset: 0,
+    isDragging: false, lastMouseY: 0, drops: [], isMeltingDown: false, meltdownTimer: 0,
+    explosionFlash: 0, shake: 0, skullPulse: 1.0, isReady: false
+};
+
+// --- FORMULAS ---
+function calculateIndustryIncome(i) {
+    const count = state.owned[i] || 0; if (count === 0) return 0;
+    const logScale = 1 + Math.log10(count + 1);
+    const milestoneBoost = Math.pow(2, Math.floor(count / 10));
+    return industries[i].baseIncome * count * logScale * milestoneBoost * state.shadowInfluence;
+}
+
+function calculateUnitIncome(i) {
+    const count = Math.max(1, state.owned[i] || 0);
+    const logScale = 1 + Math.log10(count + 1);
+    const milestoneBoost = Math.pow(2, Math.floor(count / 10));
+    return industries[i].baseIncome * logScale * milestoneBoost * state.shadowInfluence;
+}
+
+function getTotalPassiveIncome() {
+    let income = industries.reduce((acc, _, i) => acc + calculateIndustryIncome(i), 0);
+    return income * (1 - (state.heat / 166));
+}
+
+function getPassiveHeatGrowth() {
+    const income = getTotalPassiveIncome();
+    return Math.log10(income + 1) * 0.04;
+}
+
+function getBulkPrice(index, mode) {
+    const r = priceGrowth, n = state.owned[index] || 0, p0 = industries[index].basePrice, pNext = p0 * Math.pow(r, n);
+    let count = mode;
+    if (mode === 'MAX') {
+        const affordable = Math.floor(Math.log((state.money * (r - 1) / pNext) + 1) / Math.log(r));
+        count = Math.max(0, affordable);
+    }
+    if (count <= 0) return { price: 0, count: 0 };
+    return { price: pNext * (Math.pow(r, count) - 1) / (r - 1), count };
+}
+
+// --- CORE MECHANICS ---
+function triggerExplosion() {
+    state.money -= state.money * 0.15;
+    state.owned = state.owned.map(count => Math.floor(count * 0.80));
+    state.heat = 20; state.isMeltingDown = false; state.explosionFlash = 1.0; state.shake = 60;
+}
+
+function drawPixelSkull(ctx, x, y, size) {
+    if (!state.isReady) return;
+    const pSize = size / 16;
+    ctx.save();
+    ctx.translate(x - size/2, y - size/2);
+    const fillY = Math.floor(18 - (state.heat / 100 * 18));
+
+    for (let row = 0; row < 18; row++) {
+        for (let col = 0; col < 16; col++) {
+            const type = skullPixels[row][col];
+            if (type === 0) continue;
+            if (type === 3) ctx.fillStyle = '#000';
+            else if (type === 2) ctx.fillStyle = 'rgba(255,0,0,0.4)';
+            else {
+                ctx.fillStyle = row >= fillY ? (state.heat > 90 ? '#f00' : '#810') : '#200';
+            }
+            ctx.fillRect(col * pSize, row * pSize, pSize, pSize);
+        }
+    }
+    ctx.restore();
+}
+
+function handleClick(e) {
+    const x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+    const y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+    const isM = state.isMobile;
+    const sX = isM ? 0 : canvas.width - sidebarWidthDesktop;
+    const sY = isM ? canvas.height * 0.45 : 0;
+    const hH = isM ? 120 : 160;
+
+    if ((!isM && x > sX) || (isM && y > sY)) {
+        const rY = y - sY - state.scrollOffset; const fY = y - sY;
+        if (fY > 35 && fY < 60) { state.buyModeIndex = (state.buyModeIndex + 1) % buyModes.length; return; }
+        if (fY > 65 && fY < 90) {
+            const bC = Math.max(100, state.money * 0.15);
+            if (state.money >= bC && state.heat > 0) { state.money -= bC; state.heat = Math.max(0, state.heat - 15); }
+            return;
+        }
+        if (fY > 95 && fY < hH) {
+            const p = Math.floor(50 * Math.pow(1.8, state.clickUpgradeLevel));
+            if (state.money >= p) { state.money -= p; state.clickUpgradeLevel++; state.clickValue = (1 + (state.clickUpgradeLevel * 2)) * state.shadowInfluence; }
+            return;
+        }
+        const idx = Math.floor((rY - 165) / 75);
+        if (idx >= 0 && idx < industries.length) {
+            const { price, count } = getBulkPrice(idx, buyModes[state.buyModeIndex]);
+            if (state.money >= price && count > 0) { state.money -= price; state.owned[idx] = (state.owned[idx] || 0) + count; state.heat = Math.min(100, state.heat + (idx + 1) * (0.015 * count)); }
+        }
+    } else {
+        const cX = isM ? canvas.width / 2 : (canvas.width - (isM?0:sidebarWidthDesktop)) / 2;
+        const cY = isM ? canvas.height * 0.22 : canvas.height / 2;
+        const dist = Math.sqrt(Math.pow(x - cX, 2) + Math.pow(y - cY, 2));
+        if (dist < (isM?80:120)) {
+            state.heat = Math.max(0, state.heat - 1.5);
+            if (state.isMeltingDown && state.heat < 80) state.isMeltingDown = false;
+        }
+        
+        let val = state.clickValue; let isC = Math.random() < 0.1; if(isC) val *= 5; state.money += val;
+        state.particles.push({ x, y, vx: (Math.random()-0.5)*12, vy: -6 - Math.random()*3, life: 1.0, text: isC ? `CRIT +$${Math.floor(val)}` : `+$${Math.floor(val)}`, color: isC ? '255, 215, 0' : '0, 255, 102', size: isC ? 26 : 14 });
+        state.shake = Math.max(state.shake, isC ? 14 : 3); state.skullPulse = 0.8;
+    }
+}
+
+function handleResize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    state.isMobile = (canvas.width < 768);
+    const columns = Math.floor(canvas.width / 14);
+    state.drops = new Array(columns).fill(0).map(() => Math.random() * canvas.height);
+    state.isReady = true;
+}
+
+function render() {
+    if (!state.isReady) { requestAnimationFrame(render); return; }
+    
+    const now = Date.now(), dt = Math.min(0.1, (now - state.lastUpdate) / 1000); state.lastUpdate = now;
+    
+    ctx.setTransform(1,0,0,1,0,0); 
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; 
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+
+    if (state.isMeltingDown) state.shake = Math.max(state.shake, 6);
+    ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
+    state.shake *= 0.9; state.skullPulse += (1.0 - state.skullPulse) * 0.12;
+
+    state.scrollOffset += (state.targetScrollOffset - state.scrollOffset) * 0.2;
+    const income = getTotalPassiveIncome(); state.money += income * dt;
+    const hGrowth = getPassiveHeatGrowth();
+    state.heat = Math.min(100, state.heat + hGrowth * dt);
+
+    if (state.heat >= 100) {
+        if (!state.isMeltingDown) { state.isMeltingDown = true; state.meltdownTimer = 2.5; }
+        state.meltdownTimer -= dt; if (state.meltdownTimer <= 0) triggerExplosion();
+    }
+
+    const isM = state.isMobile;
+    ctx.font = '14px monospace'; ctx.textAlign = 'left';
+    const mSpeed = 1 + (state.heat / 35);
+    for(let i=0; i < (state.drops.length || 0); i++) {
+        ctx.fillStyle = state.heat > 92 ? '#610' : '#002200';
+        ctx.fillText(Math.floor(Math.random() * 16).toString(16).toUpperCase(), i * 14, state.drops[i]);
+        state.drops[i] += mSpeed;
+        if(state.drops[i] > canvas.height) state.drops[i] = 0;
+    }
+
+    if (state.explosionFlash > 0) { 
+        ctx.fillStyle = `rgba(255, 255, 255, ${state.explosionFlash})`; 
+        ctx.fillRect(0,0,canvas.width, canvas.height); 
+        state.explosionFlash -= 0.1; 
+    }
+
+    ctx.textAlign = 'left'; ctx.fillStyle = '#0f6'; ctx.font = isM ? '900 28px monospace' : '900 50px monospace';
+    ctx.fillText(`$${Math.floor(state.money).toLocaleString()}`, 20, isM ? 35 : 60);
+    ctx.font = '11px monospace'; ctx.fillStyle = '#006633';
+    ctx.fillText(`YIELD: $${income.toLocaleString(undefined,{maximumFractionDigits:1})}/S`, 20, isM ? 52 : 88);
+
+    if (!state.isMeltingDown) {
+        const sToRaid = hGrowth > 0 ? (100 - state.heat) / hGrowth : 0;
+        ctx.fillStyle = state.heat > 80 ? '#f00' : '#004422';
+        ctx.fillText(`TIME TO RAID: ${Math.floor(sToRaid)}s`, 20, isM ? 65 : 108);
+    }
+
+    const hX = isM ? canvas.width - 110 : canvas.width - sidebarWidthDesktop - 220;
+    const hY = isM ? 25 : 70;
+    ctx.fillStyle = '#120'; ctx.fillRect(hX, hY, 100, 10);
+    ctx.fillStyle = state.heat > 90 ? (Math.sin(now/80)>0?'#f00':'#fff') : '#f00';
+    ctx.fillRect(hX, hY, state.heat, 10);
+
+    const cX = isM ? canvas.width / 2 : (canvas.width - (isM?0:sidebarWidthDesktop)) / 2;
+    const cY = isM ? canvas.height * 0.22 : canvas.height / 2;
+    drawPixelSkull(ctx, cX, cY, (isM ? 130 : 200) * state.skullPulse);
+
+    if (state.isMeltingDown) {
+        ctx.textAlign = 'center'; ctx.fillStyle = '#f00'; ctx.font = '900 18px monospace';
+        ctx.fillText("FEDERAL_RAID_ACTIVE", cX, cY - (isM?80:120));
+        ctx.font = '900 26px monospace'; ctx.fillText(`${state.meltdownTimer.toFixed(1)}s`, cX, cY + (isM?100:140));
+    }
+
+    const sx = isM ? 0 : canvas.width - sidebarWidthDesktop, sy = isM ? canvas.height * 0.45 : 0;
+    const sw = isM ? canvas.width : sidebarWidthDesktop, sh = isM ? canvas.height * 0.55 : canvas.height;
+    const hH = isM ? 120 : 160;
+    ctx.fillStyle = 'rgba(0,10,0,0.98)'; ctx.fillRect(sx, sy, sw, sh);
+
+    ctx.save(); ctx.beginPath(); ctx.rect(sx, sy + hH, sw, sh - hH); ctx.clip(); ctx.translate(0, state.scrollOffset);
+    industries.forEach((ind, i) => {
+        const iY = sy + hH + 5 + (i * 75); const { price, count } = getBulkPrice(i, buyModes[state.buyModeIndex]);
+        const canA = state.money >= price && count > 0; const uRev = calculateUnitIncome(i);
+        ctx.fillStyle = canA ? 'rgba(0, 40, 0, 0.5)' : 'rgba(10, 10, 10, 0.85)'; ctx.fillRect(sx+10, iY, sw-20, 70);
+        ctx.strokeStyle = canA ? '#0f6' : '#020'; ctx.strokeRect(sx+10, iY, sw-20, 70);
+        ctx.fillStyle = ind.color; ctx.font = '14px serif'; ctx.textAlign = 'left'; ctx.fillText(ind.icon, sx+20, iY+25);
+        ctx.font = 'bold 11px monospace'; ctx.fillText(ind.name, sx+48, iY+23);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#008844'; ctx.font = 'bold 9px monospace';
+        ctx.fillText(`$${uRev.toLocaleString(undefined, {maximumFractionDigits:1})}/U`, sx+sw-25, iY+23);
+        ctx.textAlign = 'left'; ctx.fillStyle = canA ? '#0f6' : '#222'; ctx.font = 'bold 10px monospace';
+        ctx.fillText(`BUY ${count}: $${Math.floor(price).toLocaleString()}`, sx+20, iY+55);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.fillText(`x${state.owned[i] || 0}`, sx+sw-25, iY+55);
+    });
+    ctx.restore();
+
+    ctx.fillStyle = '#010'; ctx.fillRect(sx, sy, sw, hH);
+    const mW = sw - 20; ctx.fillStyle = '#020'; ctx.fillRect(sx+10, sy+35, mW, 25);
+    ctx.textAlign = 'center'; buyModes.forEach((m, idx) => {
+        const bx = sx + 10 + (idx * mW / 4);
+        if (state.buyModeIndex === idx) { ctx.fillStyle = '#0f6'; ctx.fillRect(bx, sy+35, mW/4, 25); ctx.fillStyle = '#000'; }
+        else { ctx.fillStyle = '#040'; }
+        ctx.font = 'bold 10px monospace'; ctx.fillText(m==='MAX'?'MAX':'x'+m, bx + mW/8, sy+52);
+    });
+    const bP = Math.floor(Math.max(100, state.money * 0.15));
+    ctx.textAlign = 'left'; ctx.fillStyle = state.money >= bP ? '#030' : '#010'; ctx.fillRect(sx+10, sy+65, mW, 25);
+    ctx.strokeStyle = '#0f6'; ctx.strokeRect(sx+10, sy+65, mW, 25); ctx.fillStyle = '#0f6'; ctx.fillText(`BRIBE: $${bP.toLocaleString()}`, sx+20, sy+82);
+    const uP = Math.floor(50 * Math.pow(1.8, state.clickUpgradeLevel));
+    ctx.fillStyle = state.money >= uP ? '#030' : '#010'; ctx.fillRect(sx+10, sy+95, mW, 25);
+    ctx.strokeStyle = '#0f6'; ctx.strokeRect(sx+10, sy+95, mW, 25); ctx.fillStyle = '#0f6'; ctx.fillText(`OVERCLOCK: LVL ${state.clickUpgradeLevel}`, sx+20, sy+112);
+
+    for(let i=state.particles.length-1; i >= 0; i--) {
+        const p = state.particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=0.05;
+        ctx.textAlign='center'; ctx.fillStyle = `rgba(${p.color}, ${p.life})`;
+        ctx.font=`bold ${p.size}px monospace`; ctx.fillText(p.text, p.x, p.y);
+        if(p.life<=0) state.particles.splice(i,1);
+    }
+    requestAnimationFrame(render);
+}
+
+audioInitBtn.addEventListener('click', initAudio);
+window.addEventListener('resize', handleResize);
+canvas.addEventListener('mousedown', (e) => { state.isDragging = true; state.lastMouseY = e.clientY; handleClick(e); });
+window.addEventListener('mouseup', () => state.isDragging = false);
+window.addEventListener('mousemove', (e) => {
+    if (state.isDragging) {
+        state.targetScrollOffset += (e.clientY - state.lastMouseY); state.lastMouseY = e.clientY;
+        const limit = Math.min(0, (state.isMobile ? canvas.height * 0.55 : canvas.height) - (industries.length * 75 + (state.isMobile?120:160)) - 40);
+        state.targetScrollOffset = Math.max(limit, Math.min(0, state.targetScrollOffset));
+    }
+});
+canvas.addEventListener('touchstart', (e) => { state.isDragging = true; state.lastMouseY = e.touches[0].clientY; handleClick(e.touches[0]); }, {passive: false});
+canvas.addEventListener('touchend', () => state.isDragging = false);
+canvas.addEventListener('touchmove', (e) => {
+    state.targetScrollOffset += (e.touches[0].clientY - state.lastMouseY); state.lastMouseY = e.touches[0].clientY;
+    const limit = Math.min(0, (state.isMobile ? canvas.height * 0.55 : canvas.height) - (industries.length * 75 + (state.isMobile?120:160)) - 40);
+    state.targetScrollOffset = Math.max(limit, Math.min(0, state.targetScrollOffset));
+    e.preventDefault();
+}, {passive: false});
+
+handleResize(); 
+render();
+</script>
+</body>
+</html>
