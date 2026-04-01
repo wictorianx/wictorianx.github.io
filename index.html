@@ -2,14 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Number Notebook</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Number Notebook Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        // --- Core Firebase App ---
-        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        
-        // --- Firebase Authentication ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
             onAuthStateChanged, 
@@ -21,27 +18,23 @@
             signInWithCredential
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         
-        // --- Firebase Firestore Database ---
         import { 
             getFirestore, 
             doc, 
             onSnapshot, 
             setDoc, 
             collection,
-            deleteDoc
+            query,
+            orderBy,
+            limit,
+            serverTimestamp,
+            deleteDoc,
+            enableIndexedDbPersistence,
+            addDoc,
+            updateDoc,
+            arrayRemove
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // IMPORTANT: Set log level for debugging Firebase operations
-        setLogLevel('debug');
-        
-        let app;
-        let auth;
-        let db;
-        let userId = null;
-        let notebooksRef = null;
-        let googleProvider;
-
-        // --- CONFIGURATION (RESTORED) ---
         const FIREBASE_APP_CONFIG = {
            apiKey: "AIzaSyCsNuUcV4U67P8TwgGZGzmFjhUkRwZ6QjM",
            authDomain: "notebook-463e4.firebaseapp.com",
@@ -51,12 +44,16 @@
            appId: "1:885400424886:web:c419ab84a16d7e433fb117"
         };
         
-        // --- APP STATE ---
-        const appId = "number-notebook-v1"; // Fixed App Identifier for Firestore path
+        const appId = "number-notebook-v1";
+        const TARGET_ID = "default-1765467211811"; // The notebook you want to rename
+        const TARGET_NAME = "Primary Notebook";
+
+        let app, auth, db, userId, googleProvider;
         let notebooks = [];
         let currentNotebookId = null;
+        let entriesUnsubscribe = null;
+        let legacyEntries = [];
 
-        // --- DOM ELEMENTS ---
         const notebookSelect = document.getElementById('notebookSelect');
         const entryList = document.getElementById('entryList');
         const newEntryInput = document.getElementById('newEntryInput');
@@ -67,427 +64,273 @@
         const signInBtn = document.getElementById('signInBtn');
         const signInError = document.getElementById('signInError');
         const currentUserIdDisplay = document.getElementById('currentUserIdDisplay');
-        const notebookContainer = document.getElementById('notebookContainer');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-
-        // --- FIREBASE INITIALIZATION AND AUTH ---
-
-        function updateAuthStatus(user) {
-            if (user) {
-                userId = user.uid;
-                notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
-                currentUserIdDisplay.textContent = `User: ${user.email || 'Permanent Session'}`;
-                
-                signOutBtn.classList.remove('hidden');
-
-                appUi.classList.remove('hidden');
-                authGate.classList.add('hidden');
-                
-                // Start listening for data only after successful authentication
-                startDataListener();
-
-                // Explicitly set focus to the input after successful login
-                newEntryInput.focus();
-
-            } else {
-                userId = null;
-                currentUserIdDisplay.textContent = 'Status: Not Signed In';
-                notebooksRef = null;
-                appUi.classList.add('hidden');
-                authGate.classList.remove('hidden');
-                notebooks = []; // Clear local data
-                currentNotebookId = null;
-                renderEntryList();
-                renderNotebooks();
-            }
-        }
+        const syncStatus = document.getElementById('syncStatus');
 
         async function setupFirebase() {
             try {
                 app = initializeApp(FIREBASE_APP_CONFIG);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                googleProvider = new GoogleAuthProvider(); // Initialize Google provider
-                setPersistence(auth, browserLocalPersistence); // Always set persistence
+                googleProvider = new GoogleAuthProvider();
 
-                loadingIndicator.textContent = "Connecting to cloud...";
-                loadingIndicator.classList.remove('hidden');
-                
-                // Listen for auth state changes (handles auto-login on refresh)
-                onAuthStateChanged(auth, async (user) => {
+                try {
+                    await enableIndexedDbPersistence(db);
+                } catch (err) {
+                    console.warn("Persistence failed:", err.code);
+                }
+
+                await setPersistence(auth, browserLocalPersistence);
+
+                onAuthStateChanged(auth, (user) => {
                     if (user) {
-                        updateAuthStatus(user);
-                        loadingIndicator.classList.add('hidden');
+                        userId = user.uid;
+                        currentUserIdDisplay.textContent = user.email || "Signed In";
+                        appUi.classList.remove('hidden');
+                        authGate.classList.add('hidden');
+                        listenToNotebooks();
                     } else {
-                        loadingIndicator.classList.add('hidden');
-                        updateAuthStatus(null);
+                        appUi.classList.add('hidden');
+                        authGate.classList.remove('hidden');
+                        if (entriesUnsubscribe) entriesUnsubscribe();
                     }
                 });
-                
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                loadingIndicator.textContent = `Initialization Error: ${error.message}`;
+                signInError.textContent = "Auth Error: Check Console";
             }
         }
 
-        async function handleSignOut() {
-            try {
-                await signOut(auth);
-            } catch (error) {
-                console.error("Sign Out Error:", error);
-            }
-        }
-        
-        async function handleGoogleSignIn() {
-            signInBtn.disabled = true;
-            signInError.textContent = '';
-            
-            try {
-                signInError.textContent = "Signing in...";
-                await setPersistence(auth, browserLocalPersistence);
-                await signInWithPopup(auth, googleProvider);
+        function listenToNotebooks() {
+            const notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
+            onSnapshot(notebooksRef, async (snapshot) => {
+                notebooks = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 
-            } catch (error) {
-                if (error.code === 'auth/credential-already-in-use' && error.credential) {
-                    try {
-                        signInError.textContent = "Switching to existing account...";
-                        await signInWithCredential(auth, error.credential);
-                        return;
-                    } catch (reauthError) {
-                        console.error("Failed to sign in with existing credential:", reauthError);
-                        signInError.textContent = "Error switching accounts. Try clearing site data.";
-                    }
+                // BRUTAL FIX: Automatically rename your specific notebook if found
+                const targetNb = notebooks.find(n => n.id === TARGET_ID);
+                if (targetNb && targetNb.name !== TARGET_NAME) {
+                    const nbDoc = doc(db, 'artifacts', appId, 'users', userId, 'notebooks', TARGET_ID);
+                    await updateDoc(nbDoc, { name: TARGET_NAME });
                 }
-                
-                if (error.code === 'auth/popup-closed-by-user') {
-                    signInError.textContent = "Sign in cancelled.";
-                } else if (error.code === 'auth/cancelled-popup-request') {
-                     signInError.textContent = "Sign in attempt cancelled.";
-                } else {
-                    signInError.textContent = `Sign In Failed: ${error.message}`;
-                    console.error("Google Sign-In Error:", error);
-                }
-            } finally {
-                signInBtn.disabled = false;
-            }
-        }
 
-
-        // --- FIRESTORE DATA HANDLING ---
-
-        function getNotebookPath(id) {
-            return doc(notebooksRef, id);
-        }
-
-        function getCurrentNotebook() {
-            return notebooks.find(nb => nb.id === currentNotebookId);
-        }
-
-        async function saveNotebooksToFirestore(notebooksToSave) {
-            if (!userId) return;
-            
-            await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList'), { list: notebooksToSave.map(n => ({ id: n.id, name: n.name })) });
-
-            for (const notebook of notebooksToSave) {
-                await setDoc(getNotebookPath(notebook.id), { entries: notebook.entries, name: notebook.name });
-            }
-        }
-
-        function createDefaultNotebook() {
-            const defaultId = `default-${Date.now()}`;
-            const defaultNotebook = {
-                id: defaultId,
-                name: "Primary Notebook",
-                entries: []
-            };
-            notebooks.push(defaultNotebook);
-            currentNotebookId = defaultId;
-            saveNotebooksToFirestore(notebooks);
-        }
-
-        // --- REAL-TIME DATA LISTENER ---
-
-        function startDataListener() {
-            if (!notebooksRef) return;
-
-            const listDocRef = doc(db, 'artifacts', appId, 'users', userId, 'metadata', 'notebookList');
-            onSnapshot(listDocRef, (docSnapshot) => {
-                const listData = docSnapshot.data();
-                if (listData && listData.list && listData.list.length > 0) {
-                    const listIds = listData.list.map(item => item.id);
-                    listIds.forEach(id => listenToNotebookContent(id));
-                    
-                    notebooks = listData.list.map(item => notebooks.find(n => n.id === item.id) || { id: item.id, name: item.name, entries: [] });
-                    
-                    if (!currentNotebookId || !notebooks.some(n => n.id === currentNotebookId)) {
-                         currentNotebookId = listIds[0];
-                    }
-                    renderNotebooks();
-                    renderEntryList();
-                } else if (!docSnapshot.exists() && notebooks.length === 0) {
+                if (notebooks.length === 0) {
                     createDefaultNotebook();
+                    return;
                 }
-            }, (error) => {
-                console.error("Error fetching notebook list:", error);
-                totalSumDisplay.textContent = `Error connecting to cloud.`;
-            });
-        }
-        
-        function listenToNotebookContent(id) {
-            const notebookDocRef = getNotebookPath(id);
-            onSnapshot(notebookDocRef, (docSnapshot) => {
-                const data = docSnapshot.data();
-                if (data) {
-                    const existingNotebook = notebooks.find(n => n.id === id);
-                    if (existingNotebook) {
-                        existingNotebook.entries = data.entries || [];
-                        existingNotebook.name = data.name || existingNotebook.name;
-                    } else {
-                        notebooks.push({ id, name: data.name, entries: data.entries || [] });
-                    }
-                    if (id === currentNotebookId) {
-                        renderEntryList();
-                    }
-                    renderNotebooks();
+
+                if (!currentNotebookId || !notebooks.some(n => n.id === currentNotebookId)) {
+                    currentNotebookId = notebooks[0].id;
                 }
-            }, (error) => {
-                console.error(`Error fetching notebook ${id}:`, error);
+
+                renderNotebooks();
+                listenToEntries();
             });
         }
 
-        // --- RENDER FUNCTIONS ---
+        function listenToEntries() {
+            if (entriesUnsubscribe) entriesUnsubscribe();
+            if (!currentNotebookId) return;
 
-        function calculateTotalSum(entries) {
-            return entries.reduce((sum, entry) => sum + entry.value, 0).toFixed(2);
+            const activeNotebook = notebooks.find(n => n.id === currentNotebookId);
+            legacyEntries = activeNotebook?.entries || [];
+
+            const entriesRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId, 'entries');
+            const q = query(entriesRef, orderBy('timestamp', 'desc'), limit(100));
+
+            entriesUnsubscribe = onSnapshot(q, (snapshot) => {
+                const newEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                const legacyWithFlags = legacyEntries.map(e => ({ ...e, isLegacy: true }));
+                const combined = [...newEntries, ...legacyWithFlags].sort((a, b) => b.timestamp - a.timestamp);
+                
+                renderEntries(combined);
+                
+                const isOffline = snapshot.metadata.fromCache;
+                syncStatus.textContent = isOffline ? "⚡ Offline" : "☁️ Synced";
+                syncStatus.className = isOffline ? "text-orange-500 font-bold" : "text-green-500 font-bold";
+            });
         }
+
+        async function createDefaultNotebook() {
+            const notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
+            await addDoc(notebooksRef, {
+                name: "Primary Ledger",
+                createdAt: serverTimestamp()
+            });
+        }
+
+        window.addEntry = async () => {
+            const val = parseFloat(newEntryInput.value);
+            if (isNaN(val) || val === 0 || !currentNotebookId) return;
+
+            const entriesRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId, 'entries');
+            newEntryInput.value = '';
+
+            try {
+                await addDoc(entriesRef, {
+                    value: val,
+                    timestamp: Date.now(),
+                    serverTime: serverTimestamp()
+                });
+            } catch (e) {
+                alert("Cloud sync failed. Will retry automatically.");
+            }
+        };
+
+        window.deleteEntry = async (id, timestamp, isLegacy) => {
+            if (!confirm("Delete this entry?")) return;
+            
+            if (isLegacy) {
+                const notebookDoc = doc(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId);
+                const activeNotebook = notebooks.find(n => n.id === currentNotebookId);
+                const entryToRemove = activeNotebook.entries.find(e => e.timestamp === timestamp);
+                await updateDoc(notebookDoc, {
+                    entries: arrayRemove(entryToRemove)
+                });
+            } else {
+                const entryDoc = doc(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId, 'entries', id);
+                await deleteDoc(entryDoc);
+            }
+        };
+
+        window.createNewNotebook = async () => {
+            const name = prompt("Notebook Name:");
+            if (!name?.trim()) return;
+            const notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
+            const docRef = await addDoc(notebooksRef, {
+                name: name.trim(),
+                createdAt: serverTimestamp()
+            });
+            currentNotebookId = docRef.id;
+        };
 
         function renderNotebooks() {
             notebookSelect.innerHTML = '';
-            
             notebooks.forEach(nb => {
-                const option = document.createElement('option');
-                option.value = nb.id;
-                option.textContent = nb.name;
-                option.selected = nb.id === currentNotebookId;
-                notebookSelect.appendChild(option);
+                const opt = document.createElement('option');
+                opt.value = nb.id;
+                opt.textContent = nb.name;
+                opt.selected = nb.id === currentNotebookId;
+                notebookSelect.appendChild(opt);
             });
-
-            const currentNb = getCurrentNotebook();
-            if(currentNb) {
-                 notebookContainer.querySelector('h2').textContent = currentNb.name;
-            }
+            const active = notebooks.find(n => n.id === currentNotebookId);
+            document.getElementById('nbTitle').textContent = active ? active.name : "Select Notebook";
         }
 
-        function renderEntryList() {
+        function renderEntries(entries) {
             entryList.innerHTML = '';
-            const currentNb = getCurrentNotebook();
-            
-            if (!currentNb) {
-                totalSumDisplay.textContent = '0.00';
-                return;
-            }
-
-            currentNb.entries.forEach(entry => {
+            let sum = 0;
+            entries.forEach(e => {
+                sum += e.value;
                 const li = document.createElement('li');
-                li.className = 'flex justify-between items-center py-2 border-b last:border-b-0 text-lg';
-                
-                const entryContent = document.createElement('span');
-                entryContent.className = 'flex-1 flex flex-col sm:flex-row sm:justify-between';
-                
-                const valueSpan = document.createElement('span');
-                valueSpan.className = 'font-bold text-gray-800';
-                valueSpan.textContent = `$${entry.value.toFixed(2)}`;
-                
-                const timeSpan = document.createElement('span');
-                timeSpan.className = 'text-sm text-gray-500 mt-0.5 sm:mt-0';
-                timeSpan.textContent = new Date(entry.timestamp).toLocaleString();
-
-                entryContent.appendChild(valueSpan);
-                entryContent.appendChild(timeSpan);
-                li.appendChild(entryContent);
-
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'ml-4 p-2 text-red-500 hover:text-red-700 transition duration-150 rounded-full hover:bg-red-50';
-                deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" /></svg>`;
-                deleteButton.onclick = () => handleDeleteEntry(entry.timestamp);
-                li.appendChild(deleteButton);
-
+                li.className = "flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-indigo-100 transition mb-3";
+                li.innerHTML = `
+                    <div>
+                        <div class="text-xl font-black text-slate-800">$${e.value.toFixed(2)}</div>
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${new Date(e.timestamp).toLocaleString()}</div>
+                    </div>
+                    <button onclick="deleteEntry('${e.id || ''}', ${e.timestamp}, ${!!e.isLegacy})" class="text-slate-300 hover:text-red-500 p-2 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                `;
                 entryList.appendChild(li);
             });
-
-            totalSumDisplay.textContent = calculateTotalSum(currentNb.entries);
+            totalSumDisplay.textContent = `$${sum.toFixed(2)}`;
         }
 
-        // --- USER ACTIONS ---
-
-        function handleSelectNotebook(event) {
-            currentNotebookId = event.target.value;
-            renderEntryList();
-        }
-
-        function handleAddEntry() {
-            const valueStr = newEntryInput.value.trim();
-            const value = parseFloat(valueStr);
-
-            if (isNaN(value) || value === 0) {
-                newEntryInput.value = '';
-                return;
-            }
-            
-            const currentNb = getCurrentNotebook();
-            if (!currentNb) return;
-            
-            const newEntry = {
-                value: value,
-                timestamp: Date.now() 
+        window.addEventListener('DOMContentLoaded', () => {
+            setupFirebase();
+            signInBtn.onclick = async () => {
+                try { await signInWithPopup(auth, googleProvider); } 
+                catch (e) { signInError.textContent = e.message; }
             };
-            
-            currentNb.entries.unshift(newEntry);
-            newEntryInput.value = '';
-            newEntryInput.focus();
-            
-            setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
-                .catch(e => console.error("Error saving entry:", e));
-        }
-
-        function handleDeleteEntry(timestamp) {
-            const currentNb = getCurrentNotebook();
-            if (!currentNb) return;
-            
-            const initialLength = currentNb.entries.length;
-            currentNb.entries = currentNb.entries.filter(entry => entry.timestamp !== timestamp);
-            
-            if (currentNb.entries.length !== initialLength) {
-                setDoc(getNotebookPath(currentNb.id), { entries: currentNb.entries, name: currentNb.name }, { merge: true })
-                    .catch(e => console.error("Error deleting entry:", e));
-            }
-        }
-        
-        async function handleCreateNotebook() {
-            const newName = prompt("Enter a name for the new notebook:");
-            if (newName && newName.trim()) {
-                const newId = `nb-${Date.now()}`;
-                const newNotebook = {
-                    id: newId,
-                    name: newName.trim(),
-                    entries: []
-                };
-                
-                notebooks.push(newNotebook);
-                currentNotebookId = newId;
-                
-                await saveNotebooksToFirestore(notebooks);
-                renderNotebooks();
-                renderEntryList();
-            }
-        }
-
-        // --- EVENT LISTENERS ---
-        notebookSelect.addEventListener('change', handleSelectNotebook);
-        document.getElementById('addEntryBtn').addEventListener('click', handleAddEntry);
-        document.getElementById('newEntryInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleAddEntry();
+            signOutBtn.onclick = () => signOut(auth);
+            newEntryInput.onkeydown = (e) => e.key === 'Enter' && addEntry();
+            notebookSelect.onchange = (e) => {
+                currentNotebookId = e.target.value;
+                listenToEntries();
+            };
         });
-        document.getElementById('createNotebookBtn').addEventListener('click', handleCreateNotebook);
-        signOutBtn.addEventListener('click', handleSignOut);
-        signInBtn.addEventListener('click', handleGoogleSignIn);
-
-        // --- START APP ---
-        setupFirebase();
     </script>
     <style>
-        .auth-gate {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.98);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            text-align: center;
-        }
-        .app-container {
-            max-width: 500px;
-        }
-        .scrollable-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen p-4 sm:p-8">
-    
-    <div class="app-container mx-auto bg-white rounded-xl shadow-2xl p-6 relative">
-        <!-- Auth Gate Screen (Sign In Prompt) -->
-        <div id="authGate" class="auth-gate hidden">
-            <div class="p-6 bg-white rounded-lg shadow-xl max-w-sm">
-                <h3 class="text-2xl font-bold mb-4 text-indigo-600">Welcome Back!</h3>
-                <p class="mb-6 text-gray-600">Please sign in to securely access your notebooks and cloud data.</p>
-                
-                <button id="signInBtn" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md flex items-center justify-center space-x-2">
-                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48px" height="48px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.158,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.096,4.671C14.17,17.152,15.821,16,17.707,16c2.51,0,4.858,1.605,5.925,3.905l5.882-6.19c-1.341-1.298-3.033-2.34-4.887-2.91C22.677,9.754,20.32,9,18,9c-4.664,0-8.877,1.868-11.97,4.961L6.306,14.691z"/><path fill="#4CAF50" d="M14.07,35.986c2.476,1.488,5.437,2.373,8.583,2.373c3.743,0,7.31-1.42,9.943-3.811l-5.753-4.305c-1.8,1.385-3.963,2.226-6.19,2.226c-3.411,0-6.402-1.637-8.381-4.046L14.07,35.986z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.126,1.066-0.672,2.072-1.503,2.868c-0.83,0.796-1.92,1.353-3.13,1.684l-5.753,4.305c3.007,2.776,7.245,4.409,11.882,4.409c5.118,0,9.954-1.66,13.27-5.068c3.315-3.409,5.006-7.859,5.006-12.871C48,15.4,45.856,12.288,43.611,20.083z"/></svg>
-                    Sign In with Google
-                </button>
-                <p id="signInError" class="text-sm text-red-500 mt-2 min-h-[1.25rem]"></p>
+<body class="bg-slate-50 text-slate-900 selection:bg-indigo-100 antialiased">
+
+    <div class="min-h-screen flex flex-col max-w-lg mx-auto bg-white shadow-[0_0_50px_rgba(0,0,0,0.1)] relative overflow-hidden">
+        
+        <div id="authGate" class="absolute inset-0 z-50 bg-white flex flex-col items-center justify-center p-10 text-center hidden">
+            <div class="w-24 h-24 bg-indigo-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl shadow-indigo-200 rotate-6">
+                <span class="text-white text-5xl font-black italic">#</span>
             </div>
+            <h1 class="text-4xl font-black tracking-tight mb-3">Keeper <span class="text-indigo-600 text-lg align-top uppercase tracking-widest ml-1">Pro</span></h1>
+            <p class="text-slate-400 font-medium mb-12 leading-relaxed">Your professional cloud ledger.<br>Fast, secure, and always in sync.</p>
+            <button id="signInBtn" class="w-full py-5 bg-slate-900 text-white rounded-3xl font-black hover:bg-indigo-600 transition-all flex items-center justify-center space-x-4 active:scale-[0.98] shadow-xl shadow-slate-200">
+                <svg class="w-6 h-6" viewBox="0 0 48 48"><path fill="#FFF" d="M43.6 20.1H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/></svg>
+                <span class="text-lg">Continue with Google</span>
+            </button>
+            <p id="signInError" class="mt-6 text-sm text-red-500 font-bold uppercase tracking-widest"></p>
         </div>
 
-        <!-- Main App UI -->
-        <div id="appUi" class="space-y-6 hidden">
-            <header class="flex justify-between items-center border-b pb-3">
-                <h1 class="text-2xl font-extrabold text-gray-900">
-                    <span class="text-indigo-600">#</span> Keeper
-                </h1>
-                <div class="flex space-x-2">
-                    <button id="signOutBtn" class="bg-gray-200 text-gray-700 text-sm font-medium py-1 px-3 rounded-full hover:bg-gray-300 transition duration-150">Sign Out</button>
+        <div id="appUi" class="flex-1 flex flex-col hidden">
+            <header class="px-8 pt-10 pb-6 flex justify-between items-end">
+                <div>
+                    <div id="syncStatus" class="text-[10px] font-black uppercase tracking-[0.3em] mb-2">Syncing...</div>
+                    <h2 id="nbTitle" class="text-3xl font-black truncate max-w-[240px] tracking-tight text-slate-800">...</h2>
                 </div>
+                <button id="signOutBtn" class="mb-1 text-[10px] font-black bg-slate-100 text-slate-400 px-4 py-2 rounded-full hover:bg-red-50 hover:text-red-600 transition tracking-widest">LOGOUT</button>
             </header>
 
-            <div id="userInfo" class="text-sm text-gray-500 bg-gray-50 p-2 rounded-lg">
-                <span id="currentUserIdDisplay">Status: Connecting...</span>
-                <div id="loadingIndicator" class="text-xs text-indigo-600 mt-1 hidden"></div>
-            </div>
-
-            <!-- Notebook Management -->
-            <div id="notebookContainer" class="space-y-3 p-4 bg-indigo-50 rounded-lg">
-                <h2 class="text-lg font-semibold text-indigo-800">Notebook Name</h2>
-                <select id="notebookSelect" class="w-full p-3 border border-indigo-300 rounded-lg bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                    <!-- Options populated by JS -->
-                </select>
-                <div class="flex space-x-2">
-                    <button id="createNotebookBtn" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
-                        + New Notebook
+            <div class="px-8 mb-8">
+                <div class="flex space-x-3">
+                    <div class="flex-1 relative">
+                        <select id="notebookSelect" class="w-full bg-slate-100 border-none rounded-[1.25rem] py-4 px-5 font-black text-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                            <!-- Options -->
+                        </select>
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+                        </div>
+                    </div>
+                    <button onclick="createNewNotebook()" class="aspect-square bg-indigo-600 text-white rounded-[1.25rem] flex items-center justify-center px-5 hover:bg-indigo-700 shadow-xl shadow-indigo-100 active:scale-90 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M12 6v12m6-6H6"/></svg>
                     </button>
                 </div>
             </div>
 
-            <!-- Number Entry -->
-            <div class="flex space-x-3">
-                <!-- Standard text input with decimal keypad support -->
-                <input type="text" id="newEntryInput" placeholder="Enter number (e.g., 45.99)" inputmode="decimal"
-                       class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-lg">
-                <button id="addEntryBtn"
-                        class="bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
-                    Add
-                </button>
+            <div class="px-8 mb-8">
+                <div class="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-slate-200 relative overflow-hidden group">
+                    <div class="relative z-10">
+                        <span class="text-[10px] font-black opacity-40 uppercase tracking-[0.4em] block mb-4">Total Balance</span>
+                        <div id="totalSum" class="text-6xl font-black text-white tracking-tighter tabular-nums">$0.00</div>
+                    </div>
+                    <div class="absolute -right-12 -bottom-12 w-48 h-48 bg-indigo-500 rounded-full blur-[70px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                </div>
             </div>
 
-            <!-- Entry List and Summary -->
-            <div class="border border-gray-200 rounded-lg">
-                <div class="scrollable-list">
-                    <ul id="entryList" class="p-4 divide-y divide-gray-100">
-                        <!-- Entries populated by JS -->
-                    </ul>
-                </div>
-                
-                <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
-                    <span class="text-xl font-bold text-gray-800">TOTAL:</span>
-                    <span id="totalSum" class="text-2xl font-extrabold text-indigo-600">$0.00</span>
+            <div class="px-8 mb-10">
+                <div class="relative flex items-center">
+                    <input type="text" id="newEntryInput" placeholder="0.00" inputmode="decimal"
+                           class="w-full p-8 pr-32 bg-white border-4 border-slate-50 rounded-[2.5rem] text-4xl font-black focus:border-indigo-500 focus:ring-0 transition-all shadow-sm placeholder:text-slate-200">
+                    <button id="addEntryBtn" onclick="addEntry()" class="absolute right-3 top-3 bottom-3 px-10 bg-green-500 text-white font-black rounded-[2rem] hover:bg-green-600 active:scale-95 transition shadow-lg shadow-green-100 text-lg">
+                        ADD
+                    </button>
                 </div>
             </div>
+
+            <div class="flex-1 px-8 pb-10 overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">History</h3>
+                    <div class="h-px flex-1 bg-slate-50 ml-4"></div>
+                </div>
+                <div class="flex-1 overflow-y-auto hide-scroll">
+                    <ul id="entryList"></ul>
+                </div>
+            </div>
+
+            <footer class="px-8 py-6 border-t border-slate-50 flex justify-between items-center text-[10px] font-black text-slate-300 tracking-widest uppercase">
+                <span id="currentUserIdDisplay">...</span>
+                <span>Production Build v2.1</span>
+            </footer>
         </div>
     </div>
 </body>
