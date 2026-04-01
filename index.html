@@ -45,7 +45,7 @@
         };
         
         const appId = "number-notebook-v1";
-        const TARGET_ID = "default-1765467211811"; // The notebook you want to rename
+        const TARGET_ID = "default-1765467211811"; 
         const TARGET_NAME = "Primary Notebook";
 
         let app, auth, db, userId, googleProvider;
@@ -65,6 +65,7 @@
         const signInError = document.getElementById('signInError');
         const currentUserIdDisplay = document.getElementById('currentUserIdDisplay');
         const syncStatus = document.getElementById('syncStatus');
+        const addEntryBtn = document.getElementById('addEntryBtn');
 
         async function setupFirebase() {
             try {
@@ -104,7 +105,6 @@
             onSnapshot(notebooksRef, async (snapshot) => {
                 notebooks = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 
-                // BRUTAL FIX: Automatically rename your specific notebook if found
                 const targetNb = notebooks.find(n => n.id === TARGET_ID);
                 if (targetNb && targetNb.name !== TARGET_NAME) {
                     const nbDoc = doc(db, 'artifacts', appId, 'users', userId, 'notebooks', TARGET_ID);
@@ -156,12 +156,13 @@
             });
         }
 
-        window.addEntry = async () => {
+        async function addEntry() {
             const val = parseFloat(newEntryInput.value);
             if (isNaN(val) || val === 0 || !currentNotebookId) return;
 
             const entriesRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId, 'entries');
             newEntryInput.value = '';
+            newEntryInput.focus();
 
             try {
                 await addDoc(entriesRef, {
@@ -170,11 +171,11 @@
                     serverTime: serverTimestamp()
                 });
             } catch (e) {
-                alert("Cloud sync failed. Will retry automatically.");
+                console.error("Cloud sync failed:", e);
             }
-        };
+        }
 
-        window.deleteEntry = async (id, timestamp, isLegacy) => {
+        async function deleteEntry(id, timestamp, isLegacy) {
             if (!confirm("Delete this entry?")) return;
             
             if (isLegacy) {
@@ -188,9 +189,9 @@
                 const entryDoc = doc(db, 'artifacts', appId, 'users', userId, 'notebooks', currentNotebookId, 'entries', id);
                 await deleteDoc(entryDoc);
             }
-        };
+        }
 
-        window.createNewNotebook = async () => {
+        async function createNewNotebook() {
             const name = prompt("Notebook Name:");
             if (!name?.trim()) return;
             const notebooksRef = collection(db, 'artifacts', appId, 'users', userId, 'notebooks');
@@ -199,7 +200,11 @@
                 createdAt: serverTimestamp()
             });
             currentNotebookId = docRef.id;
-        };
+        }
+
+        // Exposed to window for legacy support if needed, though we use programmatic listeners now
+        window.deleteEntry = deleteEntry;
+        window.createNewNotebook = createNewNotebook;
 
         function renderNotebooks() {
             notebookSelect.innerHTML = '';
@@ -237,16 +242,27 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             setupFirebase();
-            signInBtn.onclick = async () => {
+            
+            // Programmatic listeners - The "Pro" way
+            signInBtn.addEventListener('click', async () => {
                 try { await signInWithPopup(auth, googleProvider); } 
                 catch (e) { signInError.textContent = e.message; }
-            };
-            signOutBtn.onclick = () => signOut(auth);
-            newEntryInput.onkeydown = (e) => e.key === 'Enter' && addEntry();
-            notebookSelect.onchange = (e) => {
+            });
+
+            signOutBtn.addEventListener('click', () => signOut(auth));
+            
+            addEntryBtn.addEventListener('click', addEntry);
+
+            newEntryInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    addEntry();
+                }
+            });
+
+            notebookSelect.addEventListener('change', (e) => {
                 currentNotebookId = e.target.value;
                 listenToEntries();
-            };
+            });
         });
     </script>
     <style>
@@ -259,6 +275,7 @@
 
     <div class="min-h-screen flex flex-col max-w-lg mx-auto bg-white shadow-[0_0_50px_rgba(0,0,0,0.1)] relative overflow-hidden">
         
+        <!-- Auth Gate -->
         <div id="authGate" class="absolute inset-0 z-50 bg-white flex flex-col items-center justify-center p-10 text-center hidden">
             <div class="w-24 h-24 bg-indigo-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl shadow-indigo-200 rotate-6">
                 <span class="text-white text-5xl font-black italic">#</span>
@@ -272,6 +289,7 @@
             <p id="signInError" class="mt-6 text-sm text-red-500 font-bold uppercase tracking-widest"></p>
         </div>
 
+        <!-- App UI -->
         <div id="appUi" class="flex-1 flex flex-col hidden">
             <header class="px-8 pt-10 pb-6 flex justify-between items-end">
                 <div>
@@ -311,7 +329,7 @@
                 <div class="relative flex items-center">
                     <input type="text" id="newEntryInput" placeholder="0.00" inputmode="decimal"
                            class="w-full p-8 pr-32 bg-white border-4 border-slate-50 rounded-[2.5rem] text-4xl font-black focus:border-indigo-500 focus:ring-0 transition-all shadow-sm placeholder:text-slate-200">
-                    <button id="addEntryBtn" onclick="addEntry()" class="absolute right-3 top-3 bottom-3 px-10 bg-green-500 text-white font-black rounded-[2rem] hover:bg-green-600 active:scale-95 transition shadow-lg shadow-green-100 text-lg">
+                    <button id="addEntryBtn" class="absolute right-3 top-3 bottom-3 px-10 bg-green-500 text-white font-black rounded-[2rem] hover:bg-green-600 active:scale-95 transition shadow-lg shadow-green-100 text-lg">
                         ADD
                     </button>
                 </div>
@@ -329,7 +347,7 @@
 
             <footer class="px-8 py-6 border-t border-slate-50 flex justify-between items-center text-[10px] font-black text-slate-300 tracking-widest uppercase">
                 <span id="currentUserIdDisplay">...</span>
-                <span>Production Build v2.1</span>
+                <span>Production Build v2.2</span>
             </footer>
         </div>
     </div>
